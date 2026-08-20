@@ -1,5 +1,7 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import os
+import json
 import random
 import tempfile
 import urllib.parse
@@ -357,6 +359,44 @@ with tab_studio:
             st.markdown(f"**Watermark Signature:** `-- {active_author}`")
             if img_url:
                 st.markdown(f"📸 **4K CDN Media:** [View Direct Image]({img_url})")
+
+            # 1-Tap Native Mobile & Desktop Share Sheet
+            components.html(f"""
+            <div style="text-align: center; margin: 10px 0 5px 0;">
+                <button id="omniShareBtn" style="
+                    width: 100%;
+                    padding: 14px 20px;
+                    background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 25%, #FFD93D 50%, #6BCB77 75%, #4D96FF 100%);
+                    color: #FFFFFF;
+                    border: none;
+                    border-radius: 12px;
+                    font-size: 15px;
+                    font-weight: 800;
+                    cursor: pointer;
+                    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.45);
+                    font-family: sans-serif;
+                ">
+                    📲 1-TAP NATIVE SHARE TO INSTAGRAM, WHATSAPP, FB & LINKEDIN
+                </button>
+            </div>
+            <script>
+                document.getElementById('omniShareBtn').addEventListener('click', async () => {{
+                    if (navigator.share) {{
+                        try {{
+                            await navigator.share({{
+                                title: 'Agentic AI 4K Creation',
+                                text: {json.dumps(caption_text + ' -- ' + active_author)},
+                                url: {json.dumps(img_url or 'https://dileep-ai-studio.streamlit.app')}
+                            }});
+                        }} catch (err) {{
+                            console.log('Share dismissed');
+                        }}
+                    }} else {{
+                        alert('Native Sharing triggered! You can also use the direct buttons below.');
+                    }}
+                }});
+            </script>
+            """, height=65)
 
         res_col1, res_col2 = st.columns(2)
 
