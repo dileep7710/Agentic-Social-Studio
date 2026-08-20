@@ -346,7 +346,7 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (INSTANT LIVE SYNC WITH ST.RERUN)
+# TAB 2: CONNECT ACCOUNTS (DIRECT TOOL LINKS FOR META & LINKEDIN)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
@@ -362,15 +362,15 @@ with tab_accounts:
             input_name = st.text_input("🏷️ Signature Name / आपका नाम (Watermark)", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
             input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with country code)", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
 
-        # Meta & LinkedIn Connection
+        # Meta & LinkedIn Direct Token Tools
         with st.container(border=True):
-            st.markdown("#### 📸 2. Instagram & Facebook Token (Meta)")
-            st.link_button("🔗 Generate Meta Token (1-Click)", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
-            input_ig_token = st.text_input("Paste Meta / Instagram Token Here:", value=st.session_state["ig_token"], type="password", placeholder="EAAW...")
+            st.markdown("#### 📸 2. Instagram & Facebook (Meta)")
+            st.link_button("🔗 Direct Meta Token Generator", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
+            input_ig_token = st.text_input("Paste Meta Token Here:", value=st.session_state["ig_token"], type="password", placeholder="EAAW...")
 
         with st.container(border=True):
-            st.markdown("#### 💼 3. LinkedIn Token")
-            st.link_button("🔗 Generate LinkedIn Token (1-Click)", "https://www.linkedin.com/login?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Fdevelopers%2Fapps", use_container_width=True)
+            st.markdown("#### 💼 3. LinkedIn")
+            st.link_button("🔗 Direct LinkedIn Token Generator", "https://www.linkedin.com/developers/tools/oauth", use_container_width=True)
             input_li_token = st.text_input("Paste LinkedIn Token Here:", value=st.session_state["li_token"], type="password", placeholder="AQUg...")
 
         if st.button("✨ Save & Connect All Accounts / सभी अकाउंट्स कनेक्ट करें", type="primary", use_container_width=True):
