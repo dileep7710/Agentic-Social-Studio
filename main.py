@@ -44,7 +44,18 @@ def add_memory(user_message, agent_message):
 # PLANNER
 # ==================================================
 
+import socket
+
+def is_ollama_available() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 11434), timeout=0.2):
+            return True
+    except Exception:
+        return False
+
 def planner(task):
+    if not is_ollama_available():
+        return "1. Analyze task requirements.\n2. Execute necessary search / tools.\n3. Synthesize and deliver final result."
     try:
         response = ollama.chat(
             model="llama3.2:3b",
@@ -81,6 +92,8 @@ Output:
 # ==================================================
 
 def extract_content(task):
+    if not is_ollama_available():
+        return task
     try:
         response = ollama.chat(
             model="llama3.2:3b",

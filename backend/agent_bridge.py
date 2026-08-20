@@ -31,11 +31,14 @@ from social_tools import (
     broadcast_all_platforms
 )
 
-try:
-    import ollama
-    HAS_OLLAMA = True
-except Exception:
-    HAS_OLLAMA = False
+import socket
+
+def is_ollama_available() -> bool:
+    try:
+        with socket.create_connection(("127.0.0.1", 11434), timeout=0.2):
+            return True
+    except Exception:
+        return False
 
 
 def execute_agent_task(task: str) -> Dict[str, Any]:
@@ -72,7 +75,7 @@ def execute_agent_task(task: str) -> Dict[str, Any]:
     # Step 3: Planner Execution
     plan_text = ""
     try:
-        if HAS_OLLAMA:
+        if is_ollama_available():
             plan_text = existing_planner(task)
         else:
             plan_text = "1. Analyze task requirements.\n2. Execute necessary search / tools.\n3. Synthesize and deliver final result."
@@ -89,7 +92,7 @@ def execute_agent_task(task: str) -> Dict[str, Any]:
     # Step 4: Content Extraction
     content_text = task
     try:
-        if HAS_OLLAMA:
+        if is_ollama_available():
             content_text = existing_extract_content(task)
     except Exception:
         content_text = task
@@ -141,8 +144,9 @@ PREVIOUS MEMORY:
         iteration += 1
 
         response = None
-        if HAS_OLLAMA:
+        if is_ollama_available():
             try:
+                import ollama
                 response = ollama.chat(
                     model="llama3.2:3b",
                     messages=messages,

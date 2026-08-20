@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   Share2, Instagram, Facebook, Linkedin, MessageCircle, Sparkles,
   CheckCircle2, XCircle, AlertCircle, Upload, Film, Image as ImageIcon,
-  Download, Plus, Trash2, CheckSquare, Square, ShieldCheck
+  Download, Plus, Trash2, CheckSquare, Square, ShieldCheck, Link2
 } from 'lucide-react';
 
 export default function SocialDashboard() {
@@ -27,13 +27,13 @@ export default function SocialDashboard() {
   const [newAccId, setNewAccId] = useState('');
   const [newAccToken, setNewAccToken] = useState('');
   const [addingAccount, setAddingAccount] = useState(false);
+  const [oauthNotice, setOauthNotice] = useState(null);
 
-  // Fetch connected accounts on load
+  // Fetch connected accounts
   const fetchAccounts = async () => {
     try {
       const res = await axios.get('/api/social/accounts');
       setAccounts(res.data);
-      // Default: select all active accounts
       setSelectedAccountIds(res.data.map(a => a.id));
     } catch (err) {
       console.error('Error fetching accounts:', err);
@@ -42,7 +42,39 @@ export default function SocialDashboard() {
 
   useEffect(() => {
     fetchAccounts();
+
+    // Check OAuth return params
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('oauth') === 'success') {
+      const count = params.get('connected') || '1';
+      setOauthNotice({
+        type: 'success',
+        msg: `🎉 Successfully connected ${count} Meta / Instagram account(s) via official OAuth!`
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (params.get('oauth') === 'error') {
+      const msg = params.get('msg') || 'Meta OAuth connection was cancelled or failed.';
+      setOauthNotice({
+        type: 'error',
+        msg: `OAuth Notice: ${msg}`
+      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
+
+  const handleMetaOAuthConnect = async () => {
+    try {
+      const res = await axios.get('/api/auth/meta/url');
+      if (res.data?.auth_url) {
+        window.location.href = res.data.auth_url;
+      } else {
+        alert('Could not generate Meta OAuth URL.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to initialize Meta OAuth. Please verify backend connection.');
+    }
+  };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -168,13 +200,25 @@ export default function SocialDashboard() {
         <h1 className="text-3xl font-extrabold text-slate-100 flex items-center gap-3">
           <span className="fantasy-title">Multi-Account 1-Click Social Studio</span>
           <span className="px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-semibold border border-indigo-500/30">
-            Multi-Account Partial-Success Engine
+            Meta OAuth + Partial-Success Engine
           </span>
         </h1>
         <p className="text-sm text-slate-400">
-          Connect multiple Instagram, Facebook, LinkedIn & WhatsApp accounts, select desired targets, and publish across all in 1-Click with complete account isolation.
+          Connect your Instagram accounts seamlessly with 1-Click Meta OAuth, select multiple accounts/pages, and publish across all in 1-Click with complete user isolation.
         </p>
       </div>
+
+      {/* OAuth Feedback Notice */}
+      {oauthNotice && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between text-xs font-bold ${
+          oauthNotice.type === 'success'
+            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+            : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+        }`}>
+          <span>{oauthNotice.msg}</span>
+          <button onClick={() => setOauthNotice(null)} className="text-slate-400 hover:text-white">✕</button>
+        </div>
+      )}
 
       {/* Connected Accounts Manager */}
       <div className="glass-panel p-6 space-y-4">
@@ -186,7 +230,7 @@ export default function SocialDashboard() {
             </h2>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {accounts.length > 0 && (
               <button
                 onClick={handleSelectAll}
@@ -204,11 +248,20 @@ export default function SocialDashboard() {
               </button>
             )}
 
+            {/* Official Meta OAuth 1-Click Connect */}
+            <button
+              onClick={handleMetaOAuthConnect}
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 text-white text-xs font-extrabold flex items-center gap-2 shadow-lg shadow-pink-500/20 hover:opacity-95"
+            >
+              <Link2 className="w-4 h-4" /> 🔗 Connect Instagram (Meta OAuth)
+            </button>
+
+            {/* Manual Account Modal Trigger */}
             <button
               onClick={() => setShowAddAccountModal(true)}
-              className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-md hover:opacity-95"
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold flex items-center gap-1.5 border border-white/10"
             >
-              <Plus className="w-3.5 h-3.5" /> Connect New Account
+              <Plus className="w-3.5 h-3.5" /> Manual Add
             </button>
           </div>
         </div>
@@ -265,22 +318,22 @@ export default function SocialDashboard() {
             })}
           </div>
         ) : (
-          <div className="p-4 rounded-xl bg-slate-900/40 border border-dashed border-white/10 text-center space-y-2">
-            <p className="text-xs text-slate-400">No social accounts connected yet.</p>
-            <p className="text-[11px] text-slate-500">
-              Click <strong>"Connect New Account"</strong> above to add multiple Instagram, Facebook, LinkedIn or WhatsApp accounts.
+          <div className="p-5 rounded-xl bg-slate-900/40 border border-dashed border-white/10 text-center space-y-2">
+            <p className="text-xs text-slate-300 font-semibold">No social media accounts connected yet.</p>
+            <p className="text-[11px] text-slate-400">
+              Click <strong>"🔗 Connect Instagram (Meta OAuth)"</strong> above to link your accounts automatically without typing any tokens.
             </p>
           </div>
         )}
       </div>
 
-      {/* Connect Account Modal */}
+      {/* Connect Account Modal (Manual Fallback) */}
       {showAddAccountModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="glass-panel max-w-md w-full p-6 space-y-4 border-indigo-500/30">
             <div className="flex items-center justify-between pb-2 border-b border-white/10">
               <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <Plus className="w-4 h-4 text-indigo-400" /> Connect Social Account
+                <Plus className="w-4 h-4 text-indigo-400" /> Manual Social Account Setup
               </h3>
               <button
                 onClick={() => setShowAddAccountModal(false)}
@@ -480,7 +533,6 @@ export default function SocialDashboard() {
 
           {publishResult ? (
             <div className="space-y-4">
-              {/* Media preview */}
               {publishResult.media_url && (
                 <div className="relative group rounded-xl overflow-hidden border border-white/10 max-h-48 bg-black flex items-center justify-center">
                   {publishResult.is_video ? (

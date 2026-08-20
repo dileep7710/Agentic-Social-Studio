@@ -1,14 +1,18 @@
 import os
 import json
 import uuid
+import urllib.parse
+from datetime import datetime, timedelta
 from typing import Optional, List
 from pathlib import Path
+import httpx
 from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from jose import jwt, JWTError
 
 from backend.database import get_db, init_db
 from backend.models import User, TaskLog, PlatformSettings, SocialAccount, PostLog, PlatformPostResult
@@ -17,7 +21,9 @@ from backend.auth import (
     verify_password,
     create_access_token,
     get_current_user,
-    require_current_user
+    require_current_user,
+    SECRET_KEY,
+    ALGORITHM
 )
 from backend.agent_bridge import execute_agent_task
 from social_tools import (
@@ -32,13 +38,18 @@ from social_tools import (
     broadcast_all_platforms
 )
 
+# Meta OAuth Configuration
+META_APP_ID = os.getenv("META_APP_ID", os.getenv("FACEBOOK_APP_ID", "17841448994358440"))
+META_APP_SECRET = os.getenv("META_APP_SECRET", os.getenv("FACEBOOK_APP_SECRET", ""))
+META_REDIRECT_URI = os.getenv("META_REDIRECT_URI", "http://localhost:8000/api/auth/meta/callback")
+
 # Initialize DB tables
 init_db()
 
 app = FastAPI(
     title="Agentic AI Omni-Studio Multi-Account API",
-    description="Production-grade API for autonomous Agentic AI and multi-account social media publishing.",
-    version="2.1.0"
+    description="Production-grade API for autonomous Agentic AI and multi-account social media publishing with Meta OAuth.",
+    version="2.2.0"
 )
 
 # Enable CORS
@@ -145,13 +156,191 @@ def get_me(user: User = Depends(require_current_user)):
 
 
 # ==========================================
+# META (INSTAGRAM & FACEBOOK) OAUTH ENDPOINTS
+# ==========================================
+
+@app.get("/api/auth/meta/url")
+def get_meta_oauth_url(user: User = Depends(require_current_user)):
+    """
+    Generates a secure Meta OAuth dialog URL signed with user_id in the state JWT.
+    """
+    # Create signed state token with 15-minute expiration
+    state_payload = {
+        "user_id": user.id,
+        "nonce": uuid.uuid4().hex,
+        "exp": datetime.utcnow() + timedelta(minutes=15)
+    }
+    state_token = jwt.encode(state_payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    scope = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,business_management"
+    auth_url = (
+        f"https://www.facebook.com/v21.0/dialog/oauth"
+        f"?client_id={META_APP_ID}"
+        f"&redirect_uri={urllib.parse.quote(META_REDIRECT_URI)}"
+        f"&scope={scope}"
+        f"&response_type=code"
+        f"&state={state_token}"
+    )
+
+    return {
+        "status": "success",
+        "auth_url": auth_url
+    }
+
+
+@app.get("/api/auth/meta/callback")
+def meta_oauth_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    error_description: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Handles Meta OAuth code exchange, upgrades to Long-Lived Token, discovers Instagram accounts, and saves SocialAccount records.
+    """
+    if error or not code or not state:
+        err_msg = error_description or error or "OAuth authorization was cancelled or failed."
+        return RedirectResponse(url=f"/social?oauth=error&msg={urllib.parse.quote(err_msg)}")
+
+    # Verify and decode state JWT
+    try:
+        payload = jwt.decode(state, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="Invalid state token payload")
+    except JWTError:
+        return RedirectResponse(url="/social?oauth=error&msg=Invalid+or+expired+OAuth+state+token")
+
+    # Verify user exists in database
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return RedirectResponse(url="/social?oauth=error&msg=User+not+found")
+
+    try:
+        with httpx.Client(timeout=35.0) as client:
+            # 1. Exchange code for Short-Lived User Token
+            token_res = client.get(
+                "https://graph.facebook.com/v21.0/oauth/access_token",
+                params={
+                    "client_id": META_APP_ID,
+                    "client_secret": META_APP_SECRET,
+                    "redirect_uri": META_REDIRECT_URI,
+                    "code": code
+                }
+            )
+            token_data = token_res.json()
+            short_token = token_data.get("access_token")
+
+            if not short_token:
+                err_msg = token_data.get("error", {}).get("message", "Failed to retrieve access token from Meta")
+                return RedirectResponse(url=f"/social?oauth=error&msg={urllib.parse.quote(err_msg)}")
+
+            # 2. Upgrade to 60-Day Long-Lived User Token if App Secret is available
+            long_token = short_token
+            if META_APP_SECRET:
+                try:
+                    exchange_res = client.get(
+                        "https://graph.facebook.com/v21.0/oauth/access_token",
+                        params={
+                            "grant_type": "fb_exchange_token",
+                            "client_id": META_APP_ID,
+                            "client_secret": META_APP_SECRET,
+                            "fb_exchange_token": short_token
+                        }
+                    )
+                    if exchange_res.status_code == 200:
+                        long_token = exchange_res.json().get("access_token", short_token)
+                except Exception:
+                    pass
+
+            # 3. Discover Pages and linked Instagram Business / Professional Accounts
+            accounts_res = client.get(
+                "https://graph.facebook.com/v21.0/me/accounts",
+                params={
+                    "fields": "id,name,access_token,instagram_business_account{id,username,profile_picture_url}",
+                    "access_token": long_token
+                }
+            )
+            accounts_data = accounts_res.json()
+            pages = accounts_data.get("data", [])
+            connected_count = 0
+
+            for page in pages:
+                page_token = page.get("access_token") or long_token
+                page_id = str(page.get("id"))
+                page_name = page.get("name", f"Facebook Page {page_id[-4:]}")
+
+                # Save / update Instagram Account if linked
+                ig_data = page.get("instagram_business_account")
+                if ig_data and "id" in ig_data:
+                    ig_id = str(ig_data["id"])
+                    ig_username = ig_data.get("username", f"instagram_{ig_id[-4:]}")
+
+                    existing_ig = db.query(SocialAccount).filter(
+                        SocialAccount.user_id == user.id,
+                        SocialAccount.platform == "instagram",
+                        SocialAccount.platform_account_id == ig_id
+                    ).first()
+
+                    if existing_ig:
+                        existing_ig.platform_account_name = f"@{ig_username}"
+                        existing_ig.access_token = page_token
+                        existing_ig.status = "ACTIVE"
+                        existing_ig.expires_at = datetime.utcnow() + timedelta(days=60)
+                    else:
+                        new_ig = SocialAccount(
+                            user_id=user.id,
+                            platform="instagram",
+                            platform_account_id=ig_id,
+                            platform_account_name=f"@{ig_username}",
+                            access_token=page_token,
+                            status="ACTIVE",
+                            expires_at=datetime.utcnow() + timedelta(days=60)
+                        )
+                        db.add(new_ig)
+                    connected_count += 1
+
+                # Save / update Facebook Page
+                existing_fb = db.query(SocialAccount).filter(
+                    SocialAccount.user_id == user.id,
+                    SocialAccount.platform == "facebook",
+                    SocialAccount.platform_account_id == page_id
+                ).first()
+
+                if existing_fb:
+                    existing_fb.platform_account_name = page_name
+                    existing_fb.access_token = page_token
+                    existing_fb.status = "ACTIVE"
+                    existing_fb.expires_at = datetime.utcnow() + timedelta(days=60)
+                else:
+                    new_fb = SocialAccount(
+                        user_id=user.id,
+                        platform="facebook",
+                        platform_account_id=page_id,
+                        platform_account_name=page_name,
+                        access_token=page_token,
+                        status="ACTIVE",
+                        expires_at=datetime.utcnow() + timedelta(days=60)
+                    )
+                    db.add(new_fb)
+                connected_count += 1
+
+            db.commit()
+            return RedirectResponse(url=f"/social?oauth=success&connected={connected_count}")
+
+    except Exception as ex:
+        return RedirectResponse(url=f"/social?oauth=error&msg={urllib.parse.quote(str(ex))}")
+
+
+# ==========================================
 # SOCIAL ACCOUNT MANAGEMENT (MULTI-ACCOUNT)
 # ==========================================
 
 @app.get("/api/social/accounts")
 def get_user_social_accounts(user: User = Depends(require_current_user), db: Session = Depends(get_db)):
     """
-    Returns all social accounts belonging to the authenticated user.
+    Returns all social accounts belonging to the authenticated user (NEVER exposing sensitive tokens).
     """
     accounts = db.query(SocialAccount).filter(SocialAccount.user_id == user.id).all()
     return [
@@ -170,9 +359,8 @@ def get_user_social_accounts(user: User = Depends(require_current_user), db: Ses
 @app.post("/api/social/accounts")
 def connect_social_account(req: ConnectAccountRequest, user: User = Depends(require_current_user), db: Session = Depends(get_db)):
     """
-    Connects a new social account/page for the authenticated user.
+    Connects a new social account/page for the authenticated user (Manual fallback).
     """
-    # Check if this exact account is already connected by this user
     existing = db.query(SocialAccount).filter(
         SocialAccount.user_id == user.id,
         SocialAccount.platform == req.platform.lower(),
@@ -267,7 +455,7 @@ def publish_multi_account(
     user_id = user.id if user else None
     author_name = user.name if user else "AI Studio"
 
-    # Prepare final media URL
+    # Prepare final media URL with UUID file isolation
     final_media_url = req.media_url
     if not final_media_url:
         generated_path = create_nature_quote_image(req.content, author=author_name, is_story=True)
@@ -276,7 +464,6 @@ def publish_multi_account(
     # Fetch accounts to publish to
     accounts_to_publish = []
     if req.account_ids and user:
-        # Validate that all requested accounts belong to the authenticated user
         user_accounts = db.query(SocialAccount).filter(
             SocialAccount.user_id == user.id,
             SocialAccount.id.in_(req.account_ids)
@@ -287,7 +474,6 @@ def publish_multi_account(
 
         accounts_to_publish = user_accounts
 
-    # If no specific account IDs provided or guest mode, fetch all active accounts for user or default broadcast
     if not accounts_to_publish and user:
         accounts_to_publish = db.query(SocialAccount).filter(
             SocialAccount.user_id == user.id,
@@ -314,7 +500,6 @@ def publish_multi_account(
     failure_count = 0
 
     if accounts_to_publish:
-        # Execute independent publishing per connected account
         for acc in accounts_to_publish:
             result_item = {
                 "account_id": acc.id,
@@ -389,7 +574,6 @@ def publish_multi_account(
 
             platform_results.append(result_item)
 
-            # Record individual platform result in DB
             if post_log:
                 db_res = PlatformPostResult(
                     post_log_id=post_log.id,
@@ -404,7 +588,6 @@ def publish_multi_account(
                 db.add(db_res)
 
     else:
-        # Fallback 1-Click direct broadcasting for guest or default mode
         wa_res = post_whatsapp(content=req.content, target=req.whatsapp_phone, media_path_or_url=final_media_url, author=author_name)
         platform_results = [
             {
@@ -442,7 +625,6 @@ def publish_multi_account(
         ]
         success_count = len(platform_results)
 
-    # Determine overall status
     if failure_count == 0:
         overall_status = "SUCCESS"
     elif success_count > 0 and failure_count > 0:
