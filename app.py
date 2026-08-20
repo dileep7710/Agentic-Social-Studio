@@ -128,17 +128,17 @@ if "phone" not in st.session_state:
 if "ig_id" not in st.session_state:
     st.session_state["ig_id"] = "17841448994358440"
 if "ig_token" not in st.session_state:
-    st.session_state["ig_token"] = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+    st.session_state["ig_token"] = ""
 if "ig_user" not in st.session_state:
-    st.session_state["ig_user"] = "@dileepy18"
+    st.session_state["ig_user"] = ""
 if "fb_name" not in st.session_state:
-    st.session_state["fb_name"] = "Dileep Yaduvanshi"
+    st.session_state["fb_name"] = ""
 if "li_token" not in st.session_state:
-    st.session_state["li_token"] = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
+    st.session_state["li_token"] = ""
 if "li_urn" not in st.session_state:
-    st.session_state["li_urn"] = os.getenv("LINKEDIN_AUTHOR_URN", "")
+    st.session_state["li_urn"] = ""
 if "li_name" not in st.session_state:
-    st.session_state["li_name"] = "Dileep yadav"
+    st.session_state["li_name"] = ""
 if "history" not in st.session_state:
     st.session_state["history"] = []
 
@@ -425,8 +425,8 @@ with tab_profile:
         # Profile Section
         with st.container(border=True):
             st.markdown("#### 👤 1. User Profile Details")
-            input_name = st.text_input("🏷️ Signature Name / आपका नाम (Watermark):", value=st.session_state["watermark"], placeholder="Apna naam likhein (e.g. Dileep Yadav)")
-            input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="e.g. +919876543210")
+            input_name = st.text_input("🏷️ Signature Name / आपका नाम (Watermark):", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
+            input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number / व्हाट्सएप नंबर (e.g. +91...)")
 
         # Meta (Instagram & Facebook) Direct Token Tool
         with st.container(border=True):
