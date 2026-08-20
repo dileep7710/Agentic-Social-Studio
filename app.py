@@ -120,46 +120,10 @@ LINKEDIN_REDIRECT_URI = "https://dileep-ai-studio.streamlit.app"
 # ==========================================
 # 🤖 BACKEND 1-CLICK OAUTH CODE PROCESSOR
 # ==========================================
-# If user returned from LinkedIn/Meta with ?code=...
 if "code" in st.query_params:
     auth_code = st.query_params.get("code")
     st.info("⚡ Processing 1-Click Secure Authentication in Background...")
-    # Clear query params to keep clean URL
     st.query_params.clear()
-
-# Helper: Auto-Detect LinkedIn Profile Name & URN from Token
-def auto_detect_linkedin(token: str):
-    if not token:
-        return None, None
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            r = client.get("https://api.linkedin.com/v2/userinfo", headers={"Authorization": f"Bearer {token}"})
-            if r.status_code == 200:
-                data = r.json()
-                sub = data.get("sub")
-                name = data.get("name", "Connected User")
-                if sub:
-                    return f"urn:li:person:{sub}", name
-    except Exception:
-        pass
-    return None, None
-
-# Helper: Auto-Detect Instagram Business Account ID from Token
-def auto_detect_instagram(token: str):
-    if not token:
-        return None
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            r = client.get(f"https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account,name&access_token={token}")
-            if r.status_code == 200:
-                data = r.json().get("data", [])
-                for page in data:
-                    ig_acc = page.get("instagram_business_account", {})
-                    if "id" in ig_acc:
-                        return ig_acc["id"]
-    except Exception:
-        pass
-    return None
 
 # Sidebar
 with st.sidebar:
@@ -186,15 +150,15 @@ with st.sidebar:
 # Main Header
 if lang == "English":
     st.markdown('<div class="fantasy-title">🌌 Agentic AI Omni-Studio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">Broadcast to Instagram, Facebook, LinkedIn & WhatsApp in 1-Click</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">Zero-Token 1-Click Multi-Network Social Distribution</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="fantasy-title">🌌 एजेंटिक AI ऑम्नी-स्टूडियो</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">इंस्टाग्राम, फेसबुक, लिंक्डइन और व्हाट्सएप पर 1-क्लिक में पोस्ट करें</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">बिना किसी टोकन झंझट के 1-क्लिक में सोशल मीडिया पर पोस्ट करें</div>', unsafe_allow_html=True)
 
 # Tabs
 tab_studio, tab_accounts, tab_guide = st.tabs([
     "🔮 Studio / पोस्ट स्टूडियो", 
-    "⚙️ 1-Click Auto-Connect / अकाउंट्स जोड़ें", 
+    "⚙️ 1-Click Connect / अकाउंट्स जोड़ें", 
     "📖 Easy Guide / सरल मदद"
 ])
 
@@ -360,25 +324,29 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: 1-CLICK OAUTH AUTO-CONNECT (ZERO DEVELOPER PORTALS)
+# TAB 2: PURE 1-CLICK CONNECT (ZERO MANUAL TOKEN BOXES)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
         st.markdown("### 🌟 1-Click Instant Social Connect / सीधा 1-क्लिक कनेक्शन")
-        st.markdown("Aam users ke liye **kisi developer portal par jaane ki zaroorat nahi hai!** Bas 1-click mein apna account connect karein:")
+        st.markdown("Kisi bhi user ko **kisi token ko dekhne ya copy karne ki zaroorat nahi hai!** Bas 1-click mein apna account connect karein:")
 
     col_left_form, col_right_status = st.columns([1.25, 1], gap="large")
 
     with col_left_form:
-        # User Branding
+        # User Branding & WhatsApp
         with st.container(border=True):
-            st.markdown("#### 👤 1. Branding Profile / आपका नाम")
+            st.markdown("#### 👤 1. User Profile & WhatsApp")
             input_name = st.text_input("🏷️ Signature Name / आपका नाम (Watermark)", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
             input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with +91)", value=st.session_state["phone"], placeholder="+919876543210")
+            if st.button("💾 Save Profile / नाम सेव करें", type="primary", use_container_width=True):
+                st.session_state["watermark"] = input_name
+                st.session_state["phone"] = input_phone
+                st.success(f"🎉 Saved! Watermark set to '-- {input_name}'")
 
-        # 1-Click Instant Connectors
+        # 1-Click Instant Connectors (Zero Manual Tokens)
         with st.container(border=True):
-            st.markdown("#### 🌐 2. One-Click Social Logins / 1-क्लिक लॉगिन")
+            st.markdown("#### 🌐 2. One-Click Social Accounts / 1-क्लिक लॉगिन")
             st.caption("Standard popup par 'Allow' karein, backend token khud auto-generate kar lega!")
 
             # 1-Click LinkedIn
@@ -388,37 +356,6 @@ with tab_accounts:
             # 1-Click Meta (Facebook + Instagram)
             st.link_button("📸 1-Click Connect Instagram & Facebook", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
 
-        # Direct Paste Fallback
-        with st.container(border=True):
-            st.markdown("#### 🔑 3. Token Paste (Optional / ऑप्शनल)")
-            input_ig_token = st.text_input("Paste Meta / Instagram Token (Optional):", value=st.session_state["ig_token"], type="password", placeholder="EAAW...")
-            input_li_token = st.text_input("Paste LinkedIn Token (Optional):", value=st.session_state["li_token"], type="password", placeholder="AQUg...")
-
-        if st.button("💾 Save Profile & Connect / सेव और कनेक्ट करें", type="primary", use_container_width=True):
-            st.session_state["watermark"] = input_name
-            st.session_state["phone"] = input_phone
-            st.session_state["ig_token"] = input_ig_token
-            st.session_state["li_token"] = input_li_token
-
-            # Auto-Detect LinkedIn
-            if input_li_token:
-                with st.spinner("Auto-detecting LinkedIn account..."):
-                    detected_urn, detected_name = auto_detect_linkedin(input_li_token)
-                    if detected_urn:
-                        st.session_state["li_urn"] = detected_urn
-                        st.session_state["li_name"] = detected_name
-                        st.success(f"✅ LinkedIn Connected: **{detected_name}** ({detected_urn})")
-
-            # Auto-Detect Instagram
-            if input_ig_token:
-                with st.spinner("Auto-detecting Instagram account..."):
-                    detected_ig = auto_detect_instagram(input_ig_token)
-                    if detected_ig:
-                        st.session_state["ig_id"] = detected_ig
-                        st.success(f"✅ Instagram Connected ID: **{detected_ig}**")
-
-            st.toast("🎉 Settings Saved Successfully!")
-
     with col_right_status:
         with st.container(border=True):
             st.markdown("### 📊 Active Account Status")
@@ -427,7 +364,7 @@ with tab_accounts:
             if st.session_state["ig_token"]:
                 st.markdown("📸 **Instagram:** 🟢 `Connected & Ready`")
             else:
-                st.markdown("📸 **Instagram:** ⚪ `Not Connected`")
+                st.markdown("📸 **Instagram:** ⚪ `Click Connect Button`")
 
             # Facebook Status
             st.markdown("📘 **Facebook:** 🟢 `Timeline Ready`")
@@ -437,13 +374,13 @@ with tab_accounts:
                 li_user = st.session_state["li_name"] if st.session_state["li_name"] else "Active"
                 st.markdown(f"💼 **LinkedIn:** 🟢 `Connected ({li_user})`")
             else:
-                st.markdown("💼 **LinkedIn:** ⚪ `Not Connected`")
+                st.markdown("💼 **LinkedIn:** ⚪ `Click Connect Button`")
 
             # WhatsApp Status
             if st.session_state["phone"]:
                 st.markdown(f"💬 **WhatsApp:** 🟢 `Ready ({st.session_state['phone']})`")
             else:
-                st.markdown("💬 **WhatsApp:** ⚪ `Number Not Set`")
+                st.markdown("💬 **WhatsApp:** ⚪ `Enter Number on Left`")
 
 # ==========================================
 # TAB 3: EASY GUIDE & HELP
