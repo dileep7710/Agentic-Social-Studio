@@ -7,7 +7,6 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
-from playwright.sync_api import sync_playwright
 
 # Load .env variables
 env_path = Path(__file__).parent / ".env"
@@ -297,6 +296,7 @@ def post_facebook(content: str, media_path_or_url: str = None, author: str = Non
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
     try:
+        from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(session_dir),
@@ -439,6 +439,7 @@ def post_whatsapp(content: str, target: str = None) -> str:
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
     try:
+        from playwright.sync_api import sync_playwright
         with sync_playwright() as p:
             context = p.chromium.launch_persistent_context(
                 user_data_dir=str(session_dir),
