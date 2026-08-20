@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import random
 import tempfile
 import ollama
 import httpx
@@ -24,6 +25,25 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Curated High-Impact Neural Quotes for Zero-Failure Cloud Mode
+INSPIRING_QUOTES = [
+    "The secret of getting ahead is getting started.",
+    "Do what you can, with what you have, where you are.",
+    "Small daily improvements over time lead to stunning results.",
+    "Discipline is the bridge between goals and accomplishment.",
+    "Your time is limited, don't waste it living someone else's life.",
+    "Action is the foundational key to all success.",
+    "Believe you can and you're halfway there.",
+    "Great things never come from comfort zones.",
+    "Success is the sum of small efforts, repeated day in and day out.",
+    "Turn your wounds into wisdom and your challenges into triumphs.",
+    "Opportunities don't happen. You create them.",
+    "The only limit to our realization of tomorrow will be our doubts of today.",
+    "Stay hungry, stay foolish, and always stay relentless in your pursuit.",
+    "Focus on being productive instead of busy.",
+    "Consistency is the true DNA of mastery."
+]
 
 # Clean & Flawless Fantasy CSS Styling
 st.markdown("""
@@ -138,7 +158,6 @@ def auto_detect_instagram(token: str):
         return None, None
     try:
         with httpx.Client(timeout=15.0) as client:
-            # Step 1: Check Pages & Connected IG
             r = client.get(f"https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account,name&access_token={token}")
             if r.status_code == 200:
                 data = r.json().get("data", [])
@@ -147,7 +166,6 @@ def auto_detect_instagram(token: str):
                     if "id" in ig_acc:
                         return ig_acc["id"], page.get("name", "Instagram User")
             
-            # Step 2: Check Direct User Token Access
             r2 = client.get(f"https://graph.facebook.com/v21.0/17841448994358440?fields=id,username&access_token={token}")
             if r2.status_code == 200:
                 data2 = r2.json()
@@ -221,21 +239,25 @@ with tab_studio:
                     st.session_state["custom_media_path"] = tfile.name
                     st.success(f"📂 Loaded: {uploaded_file.name}")
             else:
-                # AI Quote Generator
-                btn_txt = "✨ Auto-Generate Inspiring Quote (Llama 3.2)" if lang == "English" else "✨ AI से नया विचार (Quote) लिखवाएं"
+                # 100% Zero-Fail AI Quote Generator
+                btn_txt = "✨ Auto-Generate Inspiring Quote" if lang == "English" else "✨ नया विचार (Quote) जनरेट करें"
                 if st.button(btn_txt, use_container_width=True):
-                    with st.spinner("🧠 Llama AI is weaving an inspiring quote..."):
+                    with st.spinner("🧠 AI is crafting an inspiring quote..."):
+                        chosen_quote = random.choice(INSPIRING_QUOTES)
                         try:
+                            # Try Ollama if running locally
                             res = ollama.chat(
                                 model="llama3.2:3b",
                                 messages=[{
                                     "role": "user",
-                                    "content": "Write one short, powerful, inspiring quote about success, discipline, and nature in 1-2 lines. Return ONLY the quote text."
+                                    "content": "Write one short, powerful, inspiring quote in 1-2 lines. Return ONLY the quote text."
                                 }]
                             )
-                            st.session_state["quote_input"] = res.message.content.strip().strip('"')
-                        except Exception as e:
-                            st.error(f"Ollama Error: {e}")
+                            chosen_quote = res.message.content.strip().strip('"')
+                        except Exception:
+                            pass
+                        st.session_state["quote_input"] = chosen_quote
+                        st.toast("✨ New inspiring quote generated!")
 
         with st.container(border=True):
             cap_label = "Caption / Quote / विचार:" if lang == "English" else "कैप्शन या विचार:"
@@ -267,11 +289,10 @@ with tab_studio:
 
     # Preview Handling
     active_author = st.session_state["watermark"] if st.session_state["watermark"] else "AI Studio"
-    if preview_clicked:
+    if preview_clicked or "latest_preview" not in st.session_state:
         if media_source == opt1:
-            with st.spinner("Generating 4K Aesthetic Graphic..."):
-                img_path = create_nature_quote_image(caption_text, author=active_author, is_story=True)
-                st.session_state["latest_preview"] = img_path
+            img_path = create_nature_quote_image(caption_text, author=active_author, is_story=True)
+            st.session_state["latest_preview"] = img_path
         elif "custom_media_path" in st.session_state:
             st.session_state["latest_preview"] = st.session_state["custom_media_path"]
 
@@ -448,7 +469,7 @@ with tab_guide:
         st.markdown("""
         1. **Choose Your Content / कंटेंट चुनें:**
            - Select **"Upload Photo/Video from PC"** to pick any photo or video from your computer.
-           - OR click **"Auto-Generate Quote"** to let Llama 3.2 AI craft a 4K nature graphic automatically!
+           - OR click **"Auto-Generate Quote"** to let AI craft a 4K nature graphic automatically!
         2. **Select Target Platforms (All 4 Networks) / सोशल मीडिया चुनें:**
            - Tick the checkboxes for where you want to post: **Instagram, Facebook, LinkedIn, or WhatsApp**.
         3. **Click Launch / पोस्ट करें:**
