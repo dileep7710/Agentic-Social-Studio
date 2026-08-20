@@ -14,13 +14,7 @@ from social_tools import (
     post_instagram_feed,
     post_facebook,
     post_linkedin,
-    post_whatsapp,
-    WATERMARK_NAME,
-    DEFAULT_WHATSAPP_PHONE,
-    IG_USER_ID,
-    IG_ACCESS_TOKEN,
-    LINKEDIN_ACCESS_TOKEN,
-    LINKEDIN_AUTHOR_URN
+    post_whatsapp
 )
 
 # Page Configuration
@@ -103,21 +97,21 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Session State
+# Initialize Session State with 100% Clean Neutral Defaults
 if "watermark" not in st.session_state:
-    st.session_state["watermark"] = WATERMARK_NAME or "AI Creator"
+    st.session_state["watermark"] = ""
 if "phone" not in st.session_state:
-    st.session_state["phone"] = DEFAULT_WHATSAPP_PHONE or ""
+    st.session_state["phone"] = ""
 if "ig_id" not in st.session_state:
-    st.session_state["ig_id"] = IG_USER_ID or ""
+    st.session_state["ig_id"] = ""
 if "ig_token" not in st.session_state:
-    st.session_state["ig_token"] = IG_ACCESS_TOKEN or ""
+    st.session_state["ig_token"] = ""
 if "li_token" not in st.session_state:
-    st.session_state["li_token"] = LINKEDIN_ACCESS_TOKEN or ""
+    st.session_state["li_token"] = ""
 if "li_urn" not in st.session_state:
-    st.session_state["li_urn"] = LINKEDIN_AUTHOR_URN or ""
+    st.session_state["li_urn"] = ""
 if "li_name" not in st.session_state:
-    st.session_state["li_name"] = "Ready"
+    st.session_state["li_name"] = "Guest User"
 
 # Helper: Auto-Detect LinkedIn Profile Name & URN from Token
 def auto_detect_linkedin(token: str):
@@ -161,13 +155,14 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👤 Active Profile / यूजर प्रोफाइल")
-    st.markdown(f'<div class="glowing-badge">🏷️ Name: {st.session_state["watermark"]}</div>', unsafe_allow_html=True)
-    if st.session_state["phone"]:
-        st.markdown(f'<div class="glowing-badge">💬 Phone: {st.session_state["phone"]}</div>', unsafe_allow_html=True)
+    display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Guest User"
+    display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
+    st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="glowing-badge">💬 Phone: {display_phone}</div>', unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown("### 🛡️ Privacy & Encryption")
-    st.caption("🔒 100% Private local architecture. Zero cloud tracking. Your private keys never leave this session.")
+    st.caption("🔒 100% Private local architecture. Zero cloud tracking. No hardcoded personal data.")
 
 # Main Header
 if lang == "English":
@@ -255,10 +250,11 @@ with tab_studio:
             publish_clicked = st.button(btn_post, type="primary", use_container_width=True)
 
     # Preview Handling
+    active_author = st.session_state["watermark"] if st.session_state["watermark"] else "AI Studio"
     if preview_clicked:
         if media_source == opt1:
             with st.spinner("Generating 4K Aesthetic Graphic..."):
-                img_path = create_nature_quote_image(caption_text, author=st.session_state["watermark"], is_story=True)
+                img_path = create_nature_quote_image(caption_text, author=active_author, is_story=True)
                 st.session_state["latest_preview"] = img_path
         elif "custom_media_path" in st.session_state:
             st.session_state["latest_preview"] = st.session_state["custom_media_path"]
@@ -272,7 +268,7 @@ with tab_studio:
             if preview_file and os.path.exists(preview_file):
                 if preview_file.lower().endswith((".png", ".jpg", ".jpeg")):
                     img = Image.open(preview_file)
-                    st.image(img, caption=f"✨ Signature Watermark: -- {st.session_state['watermark']}", use_container_width=True)
+                    st.image(img, caption=f"✨ Signature Watermark: -- {active_author}", use_container_width=True)
                 elif preview_file.lower().endswith(".mp4"):
                     st.video(preview_file)
             else:
@@ -287,7 +283,7 @@ with tab_studio:
         if media_source == opt2 and "custom_media_path" in st.session_state:
             final_media = st.session_state["custom_media_path"]
         else:
-            final_media = create_nature_quote_image(caption_text, author=st.session_state["watermark"], is_story=True)
+            final_media = create_nature_quote_image(caption_text, author=active_author, is_story=True)
             st.session_state["latest_preview"] = final_media
 
         with st.spinner("⚡ Uploading asset to high-speed CDN..."):
@@ -298,7 +294,7 @@ with tab_studio:
         # 1. Instagram Story
         if target_insta_story:
             with st.spinner("📸 Broadcasting to Instagram Story..."):
-                res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=st.session_state["watermark"])
+                res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                 with res_col1:
                     st.success("✅ **Instagram Story:** Live (24h)!")
                     with st.expander("Instagram Log"):
@@ -307,7 +303,7 @@ with tab_studio:
         # 2. Instagram Feed
         if target_insta_feed:
             with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
-                res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=st.session_state["watermark"])
+                res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                 with res_col1:
                     st.success("✅ **Instagram Feed:** Published Live!")
                     with res_col1:
@@ -316,7 +312,7 @@ with tab_studio:
         # 3. Facebook Timeline
         if target_fb:
             with st.spinner("📘 Broadcasting to Facebook Timeline..."):
-                res = post_facebook(content=caption_text, media_path_or_url=final_media, author=st.session_state["watermark"])
+                res = post_facebook(content=caption_text, media_path_or_url=final_media, author=active_author)
                 with res_col2:
                     st.success("✅ **Facebook Timeline:** Published Live!")
                     with st.expander("Facebook Log"):
@@ -325,7 +321,7 @@ with tab_studio:
         # 4. LinkedIn
         if target_li:
             with st.spinner("💼 Broadcasting to LinkedIn..."):
-                res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"], author=st.session_state["watermark"])
+                res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"], author=active_author)
                 with res_col1:
                     st.success("✅ **LinkedIn:** Published Live!")
                     with st.expander("LinkedIn Log"):
@@ -345,19 +341,19 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (AUTO-DETECT)
+# TAB 2: CONNECT ACCOUNTS (100% NEUTRAL & BLANK DEFAULTS)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
         st.markdown("### 🌟 Auto-Connect Accounts / अकाउंट्स जोड़ें")
-        st.markdown("Apna signature naam aur WhatsApp number set karein ya apna custom token jodein:")
+        st.markdown("Koi bhi user yahan apna signature naam aur WhatsApp number daalkar save kar sakta hai:")
 
     col_u1, col_u2 = st.columns(2)
     with col_u1:
         with st.container(border=True):
             st.markdown("#### 👤 1. Branding & Profile")
-            u_name = st.text_input("Aapka Naam / Signature Name", value=st.session_state["watermark"])
-            u_phone = st.text_input("WhatsApp Number (with +91)", value=st.session_state["phone"])
+            u_name = st.text_input("Aapka Naam / Signature Name", value=st.session_state["watermark"], placeholder="e.g. Rahul Sharma / आपका नाम")
+            u_phone = st.text_input("WhatsApp Number (with +91)", value=st.session_state["phone"], placeholder="e.g. +919876543210")
             if st.button("💾 Save Profile / नाम सेव करें", type="primary", use_container_width=True):
                 st.session_state["watermark"] = u_name
                 st.session_state["phone"] = u_phone
