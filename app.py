@@ -412,70 +412,47 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (USER PROFILE & DIRECT TOKEN TOOLS)
+# TAB 2: USER PROFILE & SETTINGS (CLEAN & 100% ERROR-FREE)
 # ==========================================
 with tab_profile:
     with st.container(border=True):
-        st.markdown("### 🌟 User Profile & Account Settings / प्रोफाइल और अकाउंट्स")
-        st.markdown("Apna naam aur WhatsApp number yahan likhein — **har photo par aapka watermark lagega:**")
+        st.markdown("### 👤 User Profile & Signature / प्रोफाइल सेटिंग्स")
+        st.markdown("Apna naam aur WhatsApp number yahan likhein — **har photo par aapka signature watermark lagega:**")
 
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
 
     with col_left_form:
         # Profile Section
         with st.container(border=True):
-            st.markdown("#### 👤 1. User Profile Details")
-            input_name = st.text_input("🏷️ Signature Name / आपका नाम (Watermark):", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
-            input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number / व्हाट्सएप नंबर (e.g. +91...)")
-
-        # Meta (Instagram & Facebook) Direct Token Tool
-        with st.container(border=True):
-            st.markdown("#### 📸 2. Instagram & Facebook (Meta Token Tool)")
-            st.link_button("🔗 Click to Open Meta Token Tool (Instant Link)", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
-            input_ig_token = st.text_input("Paste Meta Token Here (Optional):", value=st.session_state["ig_token"], type="password", placeholder="EAAW...")
-
-        # LinkedIn Direct Token Tool
-        with st.container(border=True):
-            st.markdown("#### 💼 3. LinkedIn (Direct Token Tool)")
-            st.link_button("🔗 Click to Open LinkedIn Token Tool (Instant Link)", "https://www.linkedin.com/developers/tools/oauth/token-generator", use_container_width=True)
-            input_li_token = st.text_input("Paste LinkedIn Token Here (Optional):", value=st.session_state["li_token"], type="password", placeholder="AQUg...")
+            st.markdown("#### 🏷️ 1. Your Details")
+            input_name = st.text_input("Signature Name / आपका नाम (Watermark):", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
+            input_phone = st.text_input("WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number / व्हाट्सएप नंबर (e.g. +91...)")
 
         b_save, b_reset = st.columns([1.5, 1])
         with b_save:
-            if st.button("✨ Save & Connect Accounts / सेव करें", type="primary", use_container_width=True):
+            if st.button("✨ Save Profile / प्रोफाइल सेव करें", type="primary", use_container_width=True):
                 st.session_state["watermark"] = input_name
                 st.session_state["phone"] = input_phone
-                st.session_state["ig_token"] = input_ig_token
-                st.session_state["li_token"] = input_li_token
-
-                # Auto-Detect LinkedIn
-                if input_li_token:
-                    with st.spinner("Connecting LinkedIn..."):
-                        detected_urn, detected_name = auto_detect_linkedin(input_li_token)
-                        if detected_urn:
-                            st.session_state["li_urn"] = detected_urn
-                            st.session_state["li_name"] = detected_name
-
-                # Auto-Detect Meta (Facebook + Instagram)
-                if input_ig_token:
-                    with st.spinner("Connecting Meta (Facebook & Instagram)..."):
-                        detected_fb, detected_ig_id, detected_ig_user = auto_detect_meta(input_ig_token)
-                        if detected_fb:
-                            st.session_state["fb_name"] = detected_fb
-                        if detected_ig_id:
-                            st.session_state["ig_id"] = detected_ig_id
-                            st.session_state["ig_user"] = detected_ig_user
-
-                st.toast("🎉 Profile & Accounts Saved Successfully!")
+                st.toast("🎉 Profile Saved Successfully!")
                 st.rerun()
 
         with b_reset:
-            if st.button("🔄 Reset to Default / रीसेट करें", use_container_width=True):
+            if st.button("🔄 Reset / रीसेट करें", use_container_width=True):
                 st.session_state["watermark"] = ""
                 st.session_state["phone"] = ""
                 st.session_state["ig_token"] = ""
                 st.session_state["li_token"] = ""
                 st.rerun()
+
+        # Pro Developer API Settings (Collapsed & Safe)
+        with st.expander("🛠️ Pro Developer API Settings (Optional)"):
+            st.caption("Only for developers who want automated background Graph API posting.")
+            input_ig_token = st.text_input("Meta Access Token (Optional):", value=st.session_state["ig_token"], type="password")
+            input_li_token = st.text_input("LinkedIn Access Token (Optional):", value=st.session_state["li_token"], type="password")
+            if st.button("Save API Tokens"):
+                st.session_state["ig_token"] = input_ig_token
+                st.session_state["li_token"] = input_li_token
+                st.success("API Tokens Saved!")
 
     with col_right_status:
         with st.container(border=True):
