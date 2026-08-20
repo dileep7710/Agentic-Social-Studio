@@ -324,7 +324,7 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: PURE 1-CLICK CONNECT (ZERO MANUAL TOKEN BOXES)
+# TAB 2: PURE 1-CLICK CONNECT (100% BLANK PLACEHOLDERS)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
@@ -338,7 +338,7 @@ with tab_accounts:
         with st.container(border=True):
             st.markdown("#### 👤 1. User Profile & WhatsApp")
             input_name = st.text_input("🏷️ Signature Name / आपका नाम (Watermark)", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
-            input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with +91)", value=st.session_state["phone"], placeholder="+919876543210")
+            input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with country code)", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
             if st.button("💾 Save Profile / नाम सेव करें", type="primary", use_container_width=True):
                 st.session_state["watermark"] = input_name
                 st.session_state["phone"] = input_phone
