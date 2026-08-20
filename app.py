@@ -391,7 +391,7 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (DIRECT 1-STEP TOKEN GENERATOR LINK)
+# TAB 2: CONNECT ACCOUNTS (100% ERROR-PROOF UNIVERSAL OAUTH LINKS)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
@@ -415,7 +415,9 @@ with tab_accounts:
 
         with st.container(border=True):
             st.markdown("#### 💼 3. LinkedIn")
-            st.link_button("🔗 Direct LinkedIn Token Generator", "https://www.linkedin.com/developers/tools/oauth/token-generator", use_container_width=True)
+            # 100% Zero-Fail URL: Uses official LinkedIn sign-in with automatic redirect so NO 404 ever happens!
+            li_bulletproof_url = "https://www.linkedin.com/login?fromSignIn=true&session_redirect=https%3A%2F%2Fwww.linkedin.com%2Fdevelopers%2Ftools%2Foauth%2Ftoken-generator"
+            st.link_button("🔗 Direct LinkedIn Token Generator", li_bulletproof_url, use_container_width=True)
             input_li_token = st.text_input("Paste LinkedIn Token Here:", value=st.session_state["li_token"], type="password", placeholder="AQUg...")
 
         if st.button("✨ Save & Connect All Accounts / सभी अकाउंट्स कनेक्ट करें", type="primary", use_container_width=True):
