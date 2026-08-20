@@ -383,18 +383,22 @@ with tab_studio:
                     else:
                         st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
 
-        # 3. LinkedIn (Live API Posting + Direct Feed View)
+        # 3. LinkedIn (API Posting for Devs or 1-Click for Public Users)
         if target_li:
             with res_col2:
                 with st.container(border=True):
                     st.markdown("#### 💼 3. LinkedIn Feed")
-                    res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"] or None, author_urn=st.session_state["li_urn"] or None, author=active_author)
-                    if "Published" in res or "Live" in res:
-                        st.success("✅ **Published Live on LinkedIn!**")
-                        st.link_button("💼 View Live Post on LinkedIn", "https://www.linkedin.com/feed/", use_container_width=True)
+                    if st.session_state["li_token"]:
+                        res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"] or None, author=active_author)
+                        if "Published" in res or "Live" in res:
+                            st.success("✅ **Published Live on Your LinkedIn!**")
+                            st.link_button("💼 View Live Post on LinkedIn", "https://www.linkedin.com/feed/", use_container_width=True)
+                        else:
+                            li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
+                            st.link_button("💼 1-Click Post to Your LinkedIn", li_share_url, use_container_width=True)
                     else:
                         li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
-                        st.link_button("💼 1-Click Post to LinkedIn", li_share_url, use_container_width=True)
+                        st.link_button("💼 1-Click Post to Your LinkedIn", li_share_url, use_container_width=True)
 
         # 4. Facebook (Universal 1-Click Timeline & Feed Post)
         if target_fb:
@@ -409,9 +413,9 @@ with tab_studio:
             with res_col2:
                 with st.container(border=True):
                     st.markdown("#### 💬 5. WhatsApp Delivery")
-                    wa_phone = st.session_state["phone"].replace("+", "").strip() if st.session_state["phone"] else "917710278967"
+                    wa_phone = st.session_state["phone"].replace("+", "").strip() if st.session_state["phone"] else ""
                     wa_text = f"{caption_text} -- {active_author}\n\n📸 4K Media: {img_url}" if img_url else caption_text
-                    wa_share_url = f"https://api.whatsapp.com/send?phone={wa_phone}&text={urllib.parse.quote(wa_text)}"
+                    wa_share_url = f"https://api.whatsapp.com/send?phone={wa_phone}&text={urllib.parse.quote(wa_text)}" if wa_phone else f"https://api.whatsapp.com/send?text={urllib.parse.quote(wa_text)}"
                     st.link_button("💬 Click to Deliver on WhatsApp", wa_share_url, use_container_width=True)
 
         st.balloons()
