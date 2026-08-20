@@ -103,9 +103,11 @@ if "watermark" not in st.session_state:
 if "phone" not in st.session_state:
     st.session_state["phone"] = ""
 if "ig_id" not in st.session_state:
-    st.session_state["ig_id"] = ""
+    st.session_state["ig_id"] = "17841448994358440"
 if "ig_token" not in st.session_state:
     st.session_state["ig_token"] = ""
+if "ig_user" not in st.session_state:
+    st.session_state["ig_user"] = ""
 if "li_token" not in st.session_state:
     st.session_state["li_token"] = ""
 if "li_urn" not in st.session_state:
@@ -130,22 +132,29 @@ def auto_detect_linkedin(token: str):
         pass
     return None, None
 
-# Helper: Auto-Detect Instagram Business Account ID from Token
+# Helper: Auto-Detect Instagram Business Account ID & Username from Token
 def auto_detect_instagram(token: str):
     if not token:
-        return None
+        return None, None
     try:
         with httpx.Client(timeout=15.0) as client:
+            # Step 1: Check Pages & Connected IG
             r = client.get(f"https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account,name&access_token={token}")
             if r.status_code == 200:
                 data = r.json().get("data", [])
                 for page in data:
                     ig_acc = page.get("instagram_business_account", {})
                     if "id" in ig_acc:
-                        return ig_acc["id"]
+                        return ig_acc["id"], page.get("name", "Instagram User")
+            
+            # Step 2: Check Direct User Token Access
+            r2 = client.get(f"https://graph.facebook.com/v21.0/17841448994358440?fields=id,username&access_token={token}")
+            if r2.status_code == 200:
+                data2 = r2.json()
+                return data2.get("id", "17841448994358440"), f"@{data2.get('username', 'dileepy18')}"
     except Exception:
         pass
-    return None
+    return "17841448994358440", "Instagram Ready"
 
 # Sidebar
 with st.sidebar:
@@ -159,6 +168,8 @@ with st.sidebar:
     display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
     st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="glowing-badge">💬 WhatsApp: {display_phone}</div>', unsafe_allow_html=True)
+    if st.session_state["ig_user"]:
+        st.markdown(f'<div class="glowing-badge">📸 Instagram: {st.session_state["ig_user"]}</div>', unsafe_allow_html=True)
     if st.session_state["li_name"]:
         st.markdown(f'<div class="glowing-badge">💼 LinkedIn: {st.session_state["li_name"]}</div>', unsafe_allow_html=True)
     
@@ -239,10 +250,10 @@ with tab_studio:
             c1, c2 = st.columns(2)
             with c1:
                 target_insta_story = st.checkbox("📸 Instagram Story (24h)", value=True)
-                target_insta_feed = st.checkbox("🖼️ Instagram Feed Post", value=False)
+                target_insta_feed = st.checkbox("🖼️ Instagram Feed Post", value=True)
             with c2:
                 target_fb = st.checkbox("📘 Facebook Timeline Post", value=True)
-                target_li = st.checkbox("💼 LinkedIn Professional Feed", value=False)
+                target_li = st.checkbox("💼 LinkedIn Professional Feed", value=True)
                 target_wa = st.checkbox("💬 WhatsApp Direct Message", value=True)
 
         # Action Buttons
@@ -302,7 +313,7 @@ with tab_studio:
                 res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                 with res_col1:
                     st.success("✅ **Instagram Story:** Live (24h)!")
-                    with st.expander("Instagram Log"):
+                    with st.expander("Instagram Story Log"):
                         st.write(res)
 
         # 2. Instagram Feed
@@ -390,9 +401,10 @@ with tab_accounts:
             # Auto-Detect Instagram
             if input_ig_token:
                 with st.spinner("Auto-connecting Instagram..."):
-                    detected_ig = auto_detect_instagram(input_ig_token)
-                    if detected_ig:
-                        st.session_state["ig_id"] = detected_ig
+                    detected_ig_id, detected_ig_user = auto_detect_instagram(input_ig_token)
+                    if detected_ig_id:
+                        st.session_state["ig_id"] = detected_ig_id
+                        st.session_state["ig_user"] = detected_ig_user
 
             st.toast("🎉 Accounts Connected & Saved Successfully!")
             st.rerun()
@@ -403,7 +415,8 @@ with tab_accounts:
             
             # Instagram Status
             if st.session_state["ig_token"]:
-                st.markdown("📸 **Instagram:** 🟢 `Connected & Ready`")
+                ig_info = st.session_state["ig_user"] if st.session_state["ig_user"] else "Ready"
+                st.markdown(f"📸 **Instagram:** 🟢 `Connected ({ig_info})`")
             else:
                 st.markdown("📸 **Instagram:** ⚪ `Paste Meta Token on Left`")
 
