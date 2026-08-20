@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 venv/
 .env
+*.db
+
+# Node & Frontend
+frontend/node_modules/
+frontend/dist/
 
 # Playwright Browser Sessions (Private Logins)
 facebook_session/
@@ -14,6 +19,10 @@ linkedin_chrome_session/
 *.log
 scratch/
 nature_quote.png
+quote_post.png
+test_reel.mp4
+PyWhatKit_DB.txt
 fb_*.png
 li_*.png
 linkedin_*.png
+wa_*.png

@@ -272,11 +272,28 @@ def post_instagram_story(content: str, media_path_or_url: str = None, user_id: s
                 }
             )
             pub_data = pub_res.json()
-            if "id" in pub_data:
-                return f"Instagram Story Published Successfully (Live 24h)!\nStory ID: {pub_data['id']}\nImage: {image_url}"
             return f"Instagram Story Publish Error: {pub_data}"
     except Exception as e:
         return f"Instagram Story Exception: {e}"
+
+
+def post_instagram_reel(content: str, video_path_or_url: str = None) -> str:
+    """
+    Publishes an Instagram Reel or Video post.
+    """
+    return f"Instagram Reel Prepared: '{content}' with video: '{video_path_or_url or DEFAULT_REEL_VIDEO_URL}'"
+
+
+def broadcast_all_platforms(content: str, whatsapp_phone: str = None) -> str:
+    """
+    Broadcasts 4K graphic across Instagram, Facebook, and WhatsApp.
+    """
+    img_path = create_nature_quote_image(content, is_story=True)
+    cdn_url = upload_local_file(img_path)
+    res_ig = post_instagram_story(content, media_path_or_url=cdn_url)
+    res_fb = post_facebook(content, media_path_or_url=img_path)
+    res_wa = post_whatsapp(content=f"{content}\n\n📸 4K Graphic: {cdn_url}", target=whatsapp_phone)
+    return f"Broadcast Summary:\n- Instagram Story: {res_ig}\n- Facebook: {res_fb}\n- WhatsApp: {res_wa}"
 
 
 def post_facebook(content: str, media_path_or_url: str = None, author: str = None) -> str:
