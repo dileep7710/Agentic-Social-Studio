@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import random
 import tempfile
+import urllib.parse
 import ollama
 import httpx
 from pathlib import Path
@@ -172,7 +173,7 @@ def auto_detect_instagram(token: str):
                 return data2.get("id", "17841448994358440"), f"@{data2.get('username', 'dileepy18')}"
     except Exception:
         pass
-    return "17841448994358440", "Instagram Ready"
+    return "17841448994358440", "@dileepy18"
 
 # Sidebar
 with st.sidebar:
@@ -192,11 +193,8 @@ with st.sidebar:
         st.markdown(f'<div class="glowing-badge">💼 LinkedIn: {st.session_state["li_name"]}</div>', unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### 🤖 Connected 4 Platforms")
-    st.markdown("- 📸 **Instagram** (Stories & Feed)")
-    st.markdown("- 📘 **Facebook** (Timeline Direct)")
-    st.markdown("- 💼 **LinkedIn** (Professional Post)")
-    st.markdown("- 💬 **WhatsApp** (Silent Delivery)")
+    st.markdown("### 🤖 Multi-Platform Engine")
+    st.caption("Live high-speed CDN + REST APIs for 1-Click Multi-Channel Broadcasting.")
 
 # Main Header
 if lang == "English":
@@ -245,7 +243,6 @@ with tab_studio:
                     with st.spinner("🧠 AI is crafting an inspiring quote..."):
                         chosen_quote = random.choice(INSPIRING_QUOTES)
                         try:
-                            # Try Ollama if running locally
                             res = ollama.chat(
                                 model="llama3.2:3b",
                                 messages=[{
@@ -269,14 +266,20 @@ with tab_studio:
 
         with st.container(border=True):
             st.markdown("### 🎯 2. Social Destinations (All 4 Networks) / सोशल मीडिया")
+            
+            # Connection Status Hints
+            ig_status_icon = "🟢" if st.session_state["ig_token"] else "⚪ (Token required in Tab 2)"
+            li_status_icon = "🟢" if st.session_state["li_token"] else "⚪ (Token required in Tab 2)"
+            wa_status_icon = "🟢" if st.session_state["phone"] else "⚪ (Phone required in Tab 2)"
+            
             c1, c2 = st.columns(2)
             with c1:
-                target_insta_story = st.checkbox("📸 Instagram Story (24h)", value=True)
-                target_insta_feed = st.checkbox("🖼️ Instagram Feed Post", value=True)
+                target_insta_story = st.checkbox(f"📸 Instagram Story (24h) {ig_status_icon}", value=True)
+                target_insta_feed = st.checkbox(f"🖼️ Instagram Feed Post {ig_status_icon}", value=True)
             with c2:
-                target_fb = st.checkbox("📘 Facebook Timeline Post", value=True)
-                target_li = st.checkbox("💼 LinkedIn Professional Feed", value=True)
-                target_wa = st.checkbox("💬 WhatsApp Direct Message", value=True)
+                target_fb = st.checkbox("📘 Facebook Web Dispatch 🟢", value=True)
+                target_li = st.checkbox(f"💼 LinkedIn Professional Feed {li_status_icon}", value=True)
+                target_wa = st.checkbox(f"💬 WhatsApp Delivery {wa_status_icon}", value=True)
 
         # Action Buttons
         b1, b2 = st.columns([1, 1.3])
@@ -330,49 +333,59 @@ with tab_studio:
 
         # 1. Instagram Story
         if target_insta_story:
-            with st.spinner("📸 Broadcasting to Instagram Story..."):
-                res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
+            if not st.session_state["ig_token"]:
                 with res_col1:
-                    st.success("✅ **Instagram Story:** Live (24h)!")
-                    with st.expander("Instagram Story Log"):
-                        st.write(res)
+                    st.warning("⚠️ **Instagram Story:** Meta Token missing. Please paste token in Tab 2 ('Connect Accounts')!")
+            else:
+                with st.spinner("📸 Broadcasting to Instagram Story (24h)..."):
+                    res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
+                    with res_col1:
+                        if "Published" in res or "Live" in res:
+                            st.success("✅ **Instagram Story (24h):** Published Live!")
+                        else:
+                            st.error(f"❌ **Instagram Story Notice:** {res}")
 
         # 2. Instagram Feed
         if target_insta_feed:
-            with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
-                res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
+            if not st.session_state["ig_token"]:
                 with res_col1:
-                    st.success("✅ **Instagram Feed:** Published Live!")
+                    st.warning("⚠️ **Instagram Feed:** Meta Token missing. Please paste token in Tab 2 ('Connect Accounts')!")
+            else:
+                with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
+                    res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                     with res_col1:
-                        st.write(res)
+                        if "Published" in res or "Live" in res:
+                            st.success("✅ **Instagram Feed:** Published Live!")
+                        else:
+                            st.error(f"❌ **Instagram Feed Notice:** {res}")
 
-        # 3. Facebook Timeline
-        if target_fb:
-            with st.spinner("📘 Broadcasting to Facebook Timeline..."):
-                res = post_facebook(content=caption_text, media_path_or_url=final_media, author=active_author)
-                with res_col2:
-                    st.success("✅ **Facebook Timeline:** Published Live!")
-                    with st.expander("Facebook Log"):
-                        st.write(res)
-
-        # 4. LinkedIn
+        # 3. LinkedIn
         if target_li:
-            with st.spinner("💼 Broadcasting to LinkedIn..."):
-                res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"], author=active_author)
-                with res_col1:
-                    st.success("✅ **LinkedIn:** Published Live!")
-                    with st.expander("LinkedIn Log"):
-                        st.write(res)
+            if not st.session_state["li_token"]:
+                with res_col2:
+                    st.warning("⚠️ **LinkedIn:** Token missing. Please paste LinkedIn token in Tab 2!")
+            else:
+                with st.spinner("💼 Broadcasting to LinkedIn..."):
+                    res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"], author=active_author)
+                    with res_col2:
+                        if "Published" in res or "Live" in res:
+                            st.success("✅ **LinkedIn Feed:** Published Live!")
+                        else:
+                            st.error(f"❌ **LinkedIn Notice:** {res}")
+
+        # 4. Facebook
+        if target_fb:
+            with res_col2:
+                fb_share_url = f"https://www.facebook.com/sharer/sharer.php?u={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}&quote={urllib.parse.quote(caption_text)}"
+                st.link_button("📘 1-Click Share to Facebook Timeline", fb_share_url, use_container_width=True)
 
         # 5. WhatsApp
         if target_wa:
-            with st.spinner("💬 Delivering to WhatsApp in background..."):
-                wa_msg = f"{caption_text}\n\n📸 4K Story Graphic: {img_url}" if img_url else caption_text
-                res = post_whatsapp(content=wa_msg, target=st.session_state["phone"])
-                with res_col2:
-                    st.success("✅ **WhatsApp:** Delivered Silently!")
-                    with st.expander("View WhatsApp Log"):
-                        st.write(res)
+            with res_col2:
+                wa_phone = st.session_state["phone"].replace("+", "").strip() if st.session_state["phone"] else ""
+                wa_text = f"{caption_text} -- {active_author}\n\n📸 4K Graphic: {img_url}" if img_url else caption_text
+                wa_share_url = f"https://api.whatsapp.com/send?phone={wa_phone}&text={urllib.parse.quote(wa_text)}"
+                st.link_button("💬 1-Click Deliver to WhatsApp", wa_share_url, use_container_width=True)
 
         st.balloons()
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
