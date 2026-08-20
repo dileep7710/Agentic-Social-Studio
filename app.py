@@ -308,7 +308,7 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (STABLE UNIVERSAL URLS)
+# TAB 2: CONNECT ACCOUNTS (ZERO-FAIL OFFICIAL LINKEDIN ROUTER)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
@@ -332,7 +332,7 @@ with tab_accounts:
             st.markdown("📘 **Facebook & 📸 Instagram (Meta):**")
             st.link_button("🔗 Connect Facebook & Instagram (1-Click)", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
             st.markdown("💼 **LinkedIn Professional:**")
-            st.link_button("🔗 Connect LinkedIn (1-Click)", "https://www.linkedin.com/developers/apps", use_container_width=True)
+            st.link_button("🔗 Connect LinkedIn (1-Click)", "https://www.linkedin.com/login?session_redirect=https%3A%2F%2Fwww.linkedin.com%2Fdevelopers%2Fapps", use_container_width=True)
 
 # ==========================================
 # TAB 3: EASY GUIDE & HELP
