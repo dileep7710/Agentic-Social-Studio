@@ -209,8 +209,8 @@ with st.sidebar:
         st.markdown(f'<div class="glowing-badge">💼 LinkedIn: {st.session_state["li_name"]}</div>', unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### ⚡ Zero-Friction Multi-Share")
-    st.caption("Post instantly via 1-Click Sharers OR Autonomous API background dispatch.")
+    st.markdown("### ⚡ Multi-Channel Engine")
+    st.caption("Broadcast 4K visual content across Instagram, Facebook, LinkedIn & WhatsApp.")
 
 # Main Header
 if lang == "English":
@@ -235,14 +235,7 @@ with tab_studio:
 
     with col_left:
         with st.container(border=True):
-            st.markdown("### 🎨 1. Content & Watermark / कंटेंट और नाम")
-
-            input_watermark = st.text_input(
-                "🏷️ Your Signature Name / आपका नाम (Watermark):",
-                value=st.session_state["watermark"],
-                placeholder="Enter your name / अपना नाम लिखें (e.g. Dileep Yadav)"
-            )
-            st.session_state["watermark"] = input_watermark
+            st.markdown("### 🎨 1. Content & Media / कंटेंट चुनें")
 
             source_label = "Select Content Source:" if lang == "English" else "कंटेंट का प्रकार चुनें:"
             opt1 = "✨ Generate 4K AI Nature Graphic" if lang == "English" else "✨ 4K AI नेचर ग्राफिक बनाएं"
@@ -331,7 +324,7 @@ with tab_studio:
             if preview_file and os.path.exists(preview_file):
                 if preview_file.lower().endswith((".png", ".jpg", ".jpeg")):
                     img = Image.open(preview_file)
-                    st.image(img, caption=f"✨ Signature Watermark: -- {active_author}", use_container_width=True)
+                    st.image(img, caption=f"✨ Watermark: -- {active_author}", use_container_width=True)
                     
                     # Direct 1-Click Download Button for ANY User!
                     with open(preview_file, "rb") as file_bytes:
@@ -376,7 +369,7 @@ with tab_studio:
                             st.error(f"❌ **Instagram Story Notice:** {res}")
             else:
                 with res_col1:
-                    st.info("📸 **Instagram Story:** Ready! (Connect Meta Token in Tab 2 for 100% autonomous background auto-posting).")
+                    st.info("📸 **Instagram Story:** Ready! (Connect Meta Token in Tab 2 for autonomous auto-posting).")
 
         # 2. Instagram Feed
         if target_insta_feed:
@@ -390,7 +383,7 @@ with tab_studio:
                             st.error(f"❌ **Instagram Feed Notice:** {res}")
             else:
                 with res_col1:
-                    st.info("🖼️ **Instagram Feed:** Ready! (Connect Meta Token in Tab 2 for 100% autonomous background auto-posting).")
+                    st.info("🖼️ **Instagram Feed:** Ready! (Connect Meta Token in Tab 2 for autonomous auto-posting).")
 
         # 3. LinkedIn (Hybrid: API if token, or Instant 1-Click Web Share)
         if target_li:
@@ -429,7 +422,7 @@ with tab_studio:
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
-        st.markdown("### 🌟 User Profile & Pro API Connect / अकाउंट्स जोड़ें")
+        st.markdown("### 🌟 User Profile & Account Settings / प्रोफाइल और अकाउंट्स")
         st.markdown("Apna naam aur tokens yahan save karein — **Sidebar aur Status turant Green 🟢 ho jayenge:**")
 
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
@@ -523,7 +516,7 @@ with tab_guide:
         1. **Write Your Quote / विचार लिखें:**
            - Type any quote or click **"Auto-Generate Inspiring Quote"**!
         2. **Enter Your Name (Watermark):**
-           - Put your name so it appears elegantly on the 4K graphic!
+           - Set your name in **Tab 2** once so it appears elegantly on every 4K graphic!
         3. **1-Click Share Everywhere:**
            - Hit **"🚀 Launch Multi-Platform Post"** and instantly share to **WhatsApp, Facebook, LinkedIn** or click **"💾 Download 4K Graphic"** to save to your phone/PC!
 
