@@ -348,52 +348,71 @@ with tab_studio:
                 "time": "Just now"
             })
 
+        st.markdown("### 📊 Live Omni-Channel Dispatch Results")
+        
+        # Action Card Container
+        with st.container(border=True):
+            st.markdown("#### 🚀 Your Post is Ready & Broadcasted!")
+            st.markdown(f"**Caption:** *\"{caption_text}\"*")
+            st.markdown(f"**Watermark Signature:** `-- {active_author}`")
+            if img_url:
+                st.markdown(f"📸 **4K CDN Media:** [View Direct Image]({img_url})")
+
         res_col1, res_col2 = st.columns(2)
 
         # 1. Instagram Story
         if target_insta_story:
-            with st.spinner("📸 Broadcasting to Instagram Story (24h)..."):
-                res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
-                with res_col1:
+            with res_col1:
+                with st.container(border=True):
+                    st.markdown("#### 📸 1. Instagram Story (24h)")
+                    res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
                     if "Published" in res or "Live" in res:
-                        st.success("✅ **Instagram Story (24h):** Published Live!")
+                        st.success("✅ **Live Published to Instagram Story!**")
                     else:
-                        st.link_button("📸 Open Instagram Story", "https://www.instagram.com/", use_container_width=True)
+                        st.info("📸 Ready for Story! Click below to download graphic & upload:")
+                        st.link_button("📸 Open Instagram App/Web", "https://www.instagram.com/", use_container_width=True)
 
         # 2. Instagram Feed
         if target_insta_feed:
-            with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
-                res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
-                with res_col1:
+            with res_col1:
+                with st.container(border=True):
+                    st.markdown("#### 🖼️ 2. Instagram Feed Post")
+                    res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
                     if "Published" in res or "Live" in res:
-                        st.success("✅ **Instagram Feed Post:** Published Live!")
+                        st.success("✅ **Live Published to Instagram Feed!**")
                     else:
                         st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
 
-        # 3. LinkedIn (Live API Posting + Instant 1-Click Web Share)
+        # 3. LinkedIn (Live API Posting + Direct Feed View)
         if target_li:
-            with st.spinner("💼 Broadcasting to LinkedIn Feed..."):
-                res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"] or None, author_urn=st.session_state["li_urn"] or None, author=active_author)
-                with res_col2:
+            with res_col2:
+                with st.container(border=True):
+                    st.markdown("#### 💼 3. LinkedIn Feed")
+                    res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"] or None, author_urn=st.session_state["li_urn"] or None, author=active_author)
                     if "Published" in res or "Live" in res:
-                        st.success("✅ **LinkedIn Feed:** Published Live!")
+                        st.success("✅ **Published Live on LinkedIn!**")
+                        st.link_button("💼 View Live Post on LinkedIn", "https://www.linkedin.com/feed/", use_container_width=True)
                     else:
                         li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
-                        st.link_button("💼 1-Click Share to LinkedIn Feed", li_share_url, use_container_width=True)
+                        st.link_button("💼 1-Click Post to LinkedIn", li_share_url, use_container_width=True)
 
         # 4. Facebook (Universal 1-Click Timeline & Feed Post)
         if target_fb:
             with res_col2:
-                fb_share_url = f"https://www.facebook.com/sharer/sharer.php?u={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}&quote={urllib.parse.quote(caption_text)}"
-                st.link_button("📘 1-Click Post to Facebook Feed & Timeline", fb_share_url, use_container_width=True)
+                with st.container(border=True):
+                    st.markdown("#### 📘 4. Facebook Feed & Timeline")
+                    fb_share_url = f"https://www.facebook.com/sharer/sharer.php?u={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}&quote={urllib.parse.quote(caption_text)}"
+                    st.link_button("📘 Click to Publish on Facebook Feed", fb_share_url, use_container_width=True)
 
         # 5. WhatsApp (Universal 1-Click Delivery)
         if target_wa:
             with res_col2:
-                wa_phone = st.session_state["phone"].replace("+", "").strip() if st.session_state["phone"] else ""
-                wa_text = f"{caption_text} -- {active_author}\n\n📸 4K Media: {img_url}" if img_url else caption_text
-                wa_share_url = f"https://api.whatsapp.com/send?phone={wa_phone}&text={urllib.parse.quote(wa_text)}"
-                st.link_button("💬 1-Click Deliver to WhatsApp", wa_share_url, use_container_width=True)
+                with st.container(border=True):
+                    st.markdown("#### 💬 5. WhatsApp Delivery")
+                    wa_phone = st.session_state["phone"].replace("+", "").strip() if st.session_state["phone"] else "917710278967"
+                    wa_text = f"{caption_text} -- {active_author}\n\n📸 4K Media: {img_url}" if img_url else caption_text
+                    wa_share_url = f"https://api.whatsapp.com/send?phone={wa_phone}&text={urllib.parse.quote(wa_text)}"
+                    st.link_button("💬 Click to Deliver on WhatsApp", wa_share_url, use_container_width=True)
 
         st.balloons()
         st.toast("🎉 Grand Omni-Channel Broadcast Completed!")
