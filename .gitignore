@@ -1,0 +1,19 @@
+# Python & Virtualenv
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Playwright Browser Sessions (Private Logins)
+facebook_session/
+whatsapp_session/
+linkedin_session/
+linkedin_chrome_session/
+
+# Generated Temporary Media & Logs
+*.log
+scratch/
+nature_quote.png
+fb_*.png
+li_*.png
+linkedin_*.png

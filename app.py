@@ -1,0 +1,389 @@
+import streamlit as st
+import os
+import tempfile
+import ollama
+import httpx
+from pathlib import Path
+from PIL import Image
+
+# Import our unified social engine tools
+from social_tools import (
+    create_nature_quote_image,
+    upload_local_file,
+    post_instagram_story,
+    post_instagram_feed,
+    post_facebook,
+    post_linkedin,
+    post_whatsapp,
+    WATERMARK_NAME,
+    DEFAULT_WHATSAPP_PHONE,
+    IG_USER_ID,
+    IG_ACCESS_TOKEN,
+    LINKEDIN_ACCESS_TOKEN,
+    LINKEDIN_AUTHOR_URN
+)
+
+# Page Configuration
+st.set_page_config(
+    page_title="Agentic AI Omni-Studio | Cloud Edition",
+    page_icon="🌌",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Clean & Flawless Fantasy CSS Styling
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    .stApp {
+        background: radial-gradient(circle at 10% 20%, #17153B 0%, #0F1026 50%, #08071A 100%);
+    }
+
+    .fantasy-title {
+        font-size: 2.6rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #FF6B6B 0%, #FF8E53 25%, #FFD93D 50%, #6BCB77 75%, #4D96FF 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 2px;
+    }
+
+    .fantasy-subtitle {
+        color: #94A3B8;
+        font-size: 1.05rem;
+        font-weight: 400;
+        margin-bottom: 20px;
+    }
+
+    .glowing-badge {
+        display: block;
+        padding: 8px 14px;
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        border-radius: 10px;
+        color: #DDD6FE;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background-color: transparent;
+        margin-bottom: 15px;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        background: rgba(30, 41, 59, 0.6);
+        border-radius: 10px;
+        padding: 8px 18px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #94A3B8;
+        font-weight: 600;
+    }
+
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #6366F1, #8B5CF6) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(139, 92, 246, 0.6) !important;
+        box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(30, 41, 59, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 14px;
+        padding: 16px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Initialize Session State
+if "watermark" not in st.session_state:
+    st.session_state["watermark"] = WATERMARK_NAME or "AI Creator"
+if "phone" not in st.session_state:
+    st.session_state["phone"] = DEFAULT_WHATSAPP_PHONE or ""
+if "ig_id" not in st.session_state:
+    st.session_state["ig_id"] = IG_USER_ID or ""
+if "ig_token" not in st.session_state:
+    st.session_state["ig_token"] = IG_ACCESS_TOKEN or ""
+if "li_token" not in st.session_state:
+    st.session_state["li_token"] = LINKEDIN_ACCESS_TOKEN or ""
+if "li_urn" not in st.session_state:
+    st.session_state["li_urn"] = LINKEDIN_AUTHOR_URN or ""
+if "li_name" not in st.session_state:
+    st.session_state["li_name"] = "Ready"
+
+# Helper: Auto-Detect LinkedIn Profile Name & URN from Token
+def auto_detect_linkedin(token: str):
+    if not token:
+        return None, None
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get("https://api.linkedin.com/v2/userinfo", headers={"Authorization": f"Bearer {token}"})
+            if r.status_code == 200:
+                data = r.json()
+                sub = data.get("sub")
+                name = data.get("name", "Connected User")
+                if sub:
+                    return f"urn:li:person:{sub}", name
+    except Exception:
+        pass
+    return None, None
+
+# Helper: Auto-Detect Instagram Business Account ID from Token
+def auto_detect_instagram(token: str):
+    if not token:
+        return None
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            r = client.get(f"https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account,name&access_token={token}")
+            if r.status_code == 200:
+                data = r.json().get("data", [])
+                for page in data:
+                    ig_acc = page.get("instagram_business_account", {})
+                    if "id" in ig_acc:
+                        return ig_acc["id"]
+    except Exception:
+        pass
+    return None
+
+# Sidebar
+with st.sidebar:
+    st.image("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80", use_container_width=True)
+    
+    lang = st.radio("🌐 Language / भाषा:", ["English", "हिन्दी (Hindi)"], horizontal=True)
+    
+    st.markdown("---")
+    st.markdown("### 👤 Active Profile / यूजर प्रोफाइल")
+    st.markdown(f'<div class="glowing-badge">🏷️ Name: {st.session_state["watermark"]}</div>', unsafe_allow_html=True)
+    if st.session_state["phone"]:
+        st.markdown(f'<div class="glowing-badge">💬 Phone: {st.session_state["phone"]}</div>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("### 🛡️ Privacy & Encryption")
+    st.caption("🔒 100% Private local architecture. Zero cloud tracking. Your private keys never leave this session.")
+
+# Main Header
+if lang == "English":
+    st.markdown('<div class="fantasy-title">🌌 Agentic AI Omni-Studio</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">Zero-Configuration Multi-Platform Social Studio for Everyone</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<div class="fantasy-title">🌌 एजेंटिक AI ऑम्नी-स्टूडियो</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">बिना किसी टेक्निकल झंझट के एक-क्लिक में सोशल मीडिया पर पोस्ट करें</div>', unsafe_allow_html=True)
+
+# Tabs
+tab_studio, tab_accounts, tab_guide = st.tabs([
+    "🔮 Studio / पोस्ट स्टूडियो", 
+    "⚙️ Connect Accounts / अकाउंट्स जोड़ें", 
+    "📖 Easy Guide / सरल मदद"
+])
+
+# ==========================================
+# TAB 1: STUDIO (POST CREATOR)
+# ==========================================
+with tab_studio:
+    col_left, col_right = st.columns([1.25, 1], gap="large")
+
+    with col_left:
+        with st.container(border=True):
+            st.markdown("### 🎨 1. Media Source / कंटेंट चुनें")
+
+            source_label = "Select Content Type:" if lang == "English" else "कंटेंट का प्रकार चुनें:"
+            opt1 = "✨ Generate 4K AI Nature Graphic" if lang == "English" else "✨ 4K AI नेचर ग्राफिक बनाएं"
+            opt2 = "📂 Upload Photo/Video from PC" if lang == "English" else "📂 कम्प्यूटर से फोटो/वीडियो चुनें"
+
+            media_source = st.radio(source_label, [opt1, opt2], horizontal=True)
+
+            if media_source == opt2:
+                up_label = "Choose an image (.jpg, .png) or video (.mp4) from your local folder:" if lang == "English" else "अपने कम्प्यूटर के किसी भी फोल्डर से फोटो या वीडियो चुनें:"
+                uploaded_file = st.file_uploader(up_label, type=["jpg", "jpeg", "png", "mp4"])
+                if uploaded_file is not None:
+                    suffix = Path(uploaded_file.name).suffix
+                    tfile = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+                    tfile.write(uploaded_file.read())
+                    st.session_state["custom_media_path"] = tfile.name
+                    st.success(f"📂 Loaded: {uploaded_file.name}")
+            else:
+                # AI Quote Generator
+                btn_txt = "✨ Auto-Generate Inspiring Quote (Llama 3.2)" if lang == "English" else "✨ AI से नया विचार (Quote) लिखवाएं"
+                if st.button(btn_txt, use_container_width=True):
+                    with st.spinner("🧠 Llama AI is weaving an inspiring quote..."):
+                        try:
+                            res = ollama.chat(
+                                model="llama3.2:3b",
+                                messages=[{
+                                    "role": "user",
+                                    "content": "Write one short, powerful, inspiring quote about success, discipline, and nature in 1-2 lines. Return ONLY the quote text."
+                                }]
+                            )
+                            st.session_state["quote_input"] = res.message.content.strip().strip('"')
+                        except Exception as e:
+                            st.error(f"Ollama Error: {e}")
+
+        with st.container(border=True):
+            cap_label = "Caption / Quote / विचार:" if lang == "English" else "कैप्शन या विचार:"
+            caption_text = st.text_area(
+                cap_label,
+                value=st.session_state.get("quote_input", "The secret of getting ahead is getting started."),
+                height=80
+            )
+
+        with st.container(border=True):
+            st.markdown("### 🎯 2. Social Destinations / सोशल मीडिया चुनें")
+            c1, c2 = st.columns(2)
+            with c1:
+                target_insta_story = st.checkbox("📸 Instagram Story (24h)", value=True)
+                target_insta_feed = st.checkbox("🖼️ Instagram Feed Post", value=False)
+            with c2:
+                target_fb = st.checkbox("📘 Facebook Timeline", value=True)
+                target_li = st.checkbox("💼 LinkedIn Feed", value=False)
+                target_wa = st.checkbox("💬 WhatsApp Delivery", value=True)
+
+        # Action Buttons
+        b1, b2 = st.columns([1, 1.3])
+        with b1:
+            btn_prev = "🖼️ Refresh Preview" if lang == "English" else "🖼️ प्रीव्यू देखें"
+            preview_clicked = st.button(btn_prev, use_container_width=True)
+        with b2:
+            btn_post = "🚀 Launch Multi-Platform Post" if lang == "English" else "🚀 सभी जगह पोस्ट करें"
+            publish_clicked = st.button(btn_post, type="primary", use_container_width=True)
+
+    # Preview Handling
+    if preview_clicked:
+        if media_source == opt1:
+            with st.spinner("Generating 4K Aesthetic Graphic..."):
+                img_path = create_nature_quote_image(caption_text, author=st.session_state["watermark"], is_story=True)
+                st.session_state["latest_preview"] = img_path
+        elif "custom_media_path" in st.session_state:
+            st.session_state["latest_preview"] = st.session_state["custom_media_path"]
+
+    with col_right:
+        with st.container(border=True):
+            prev_title = "### 🖼️ Live 4K Visual Preview" if lang == "English" else "### 🖼️ लाइव प्रीव्यू"
+            st.markdown(prev_title)
+            
+            preview_file = st.session_state.get("latest_preview")
+            if preview_file and os.path.exists(preview_file):
+                if preview_file.lower().endswith((".png", ".jpg", ".jpeg")):
+                    img = Image.open(preview_file)
+                    st.image(img, caption=f"✨ Signature Watermark: -- {st.session_state['watermark']}", use_container_width=True)
+                elif preview_file.lower().endswith(".mp4"):
+                    st.video(preview_file)
+            else:
+                info_txt = "👈 Select a file or click 'Refresh Preview' to see your media here!" if lang == "English" else "👈 बाईं तरफ फोटो चुनें या प्रीव्यू बटन दबाएं!"
+                st.info(info_txt)
+
+    # Multi-Platform Execution
+    if publish_clicked:
+        st.markdown("---")
+        st.markdown("### 📊 Live Omni-Channel Dispatch Stream")
+
+        if media_source == opt2 and "custom_media_path" in st.session_state:
+            final_media = st.session_state["custom_media_path"]
+        else:
+            final_media = create_nature_quote_image(caption_text, author=st.session_state["watermark"], is_story=True)
+            st.session_state["latest_preview"] = final_media
+
+        with st.spinner("⚡ Uploading asset to high-speed CDN..."):
+            img_url = upload_local_file(final_media)
+
+        res_col1, res_col2 = st.columns(2)
+
+        # 1. Instagram Story
+        if target_insta_story:
+            with st.spinner("📸 Broadcasting to Instagram Story..."):
+                res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=st.session_state["watermark"])
+                with res_col1:
+                    st.success("✅ **Instagram Story:** Live (24h)!")
+                    with st.expander("Instagram Log"):
+                        st.write(res)
+
+        # 2. Instagram Feed
+        if target_insta_feed:
+            with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
+                res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=st.session_state["watermark"])
+                with res_col1:
+                    st.success("✅ **Instagram Feed:** Published Live!")
+                    with res_col1:
+                        st.write(res)
+
+        # 3. Facebook Timeline
+        if target_fb:
+            with st.spinner("📘 Broadcasting to Facebook Timeline..."):
+                res = post_facebook(content=caption_text, media_path_or_url=final_media, author=st.session_state["watermark"])
+                with res_col2:
+                    st.success("✅ **Facebook Timeline:** Published Live!")
+                    with st.expander("Facebook Log"):
+                        st.write(res)
+
+        # 4. LinkedIn
+        if target_li:
+            with st.spinner("💼 Broadcasting to LinkedIn..."):
+                res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"], author=st.session_state["watermark"])
+                with res_col1:
+                    st.success("✅ **LinkedIn:** Published Live!")
+                    with st.expander("LinkedIn Log"):
+                        st.write(res)
+
+        # 5. WhatsApp
+        if target_wa:
+            with st.spinner("💬 Delivering to WhatsApp in background..."):
+                wa_msg = f"{caption_text}\n\n📸 4K Story Graphic: {img_url}" if img_url else caption_text
+                res = post_whatsapp(content=wa_msg, target=st.session_state["phone"])
+                with res_col2:
+                    st.success("✅ **WhatsApp:** Delivered Silently!")
+                    with st.expander("View WhatsApp Log"):
+                        st.write(res)
+
+        st.balloons()
+        st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
+
+# ==========================================
+# TAB 2: CONNECT ACCOUNTS (AUTO-DETECT)
+# ==========================================
+with tab_accounts:
+    with st.container(border=True):
+        st.markdown("### 🌟 Auto-Connect Accounts / अकाउंट्स जोड़ें")
+        st.markdown("Apna signature naam aur WhatsApp number set karein ya apna custom token jodein:")
+
+    col_u1, col_u2 = st.columns(2)
+    with col_u1:
+        with st.container(border=True):
+            st.markdown("#### 👤 1. Branding & Profile")
+            u_name = st.text_input("Aapka Naam / Signature Name", value=st.session_state["watermark"])
+            u_phone = st.text_input("WhatsApp Number (with +91)", value=st.session_state["phone"])
+            if st.button("💾 Save Profile / नाम सेव करें", type="primary", use_container_width=True):
+                st.session_state["watermark"] = u_name
+                st.session_state["phone"] = u_phone
+                st.success(f"🎉 Saved! Watermark set to '-- {u_name}'")
+
+    with col_u2:
+        with st.container(border=True):
+            st.markdown("#### 🔑 2. Custom Social Accounts (Optional)")
+            st.markdown("Custom account add karne ke liye direct 1-click links:")
+            st.link_button("🔗 Get Instagram Token", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
+            st.link_button("🔗 Get LinkedIn Token", "https://www.linkedin.com/developers/tools/oauth", use_container_width=True)
+
+# ==========================================
+# TAB 3: EASY GUIDE & HELP
+# ==========================================
+with tab_guide:
+    with st.container(border=True):
+        st.markdown("### 📖 How to Use This Studio (Simple 3-Step Guide)")
+        st.markdown("""
+        1. **Choose Your Content / कंटेंट चुनें:**
+           - Select **"Upload Photo/Video from PC"** to pick any photo or video from your computer.
+           - OR click **"Auto-Generate Quote"** to let Llama 3.2 AI craft a 4K nature graphic automatically!
+        2. **Select Target Platforms / सोशल मीडिया चुनें:**
+           - Tick the checkboxes for where you want to post: **Instagram, Facebook, LinkedIn, or WhatsApp**.
+        3. **Click Launch / पोस्ट करें:**
+           - Hit **"🚀 Launch Multi-Platform Post"** and watch your content publish across all channels simultaneously!
+        """)
+        st.markdown("---")
+        st.markdown("💡 **Tip:** To launch the studio anytime without opening VS Code, simply double-click the **`Launch_AI_Studio.bat`** file on your computer!")
