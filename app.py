@@ -346,7 +346,7 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (DIRECT TOOL LINKS FOR META & LINKEDIN)
+# TAB 2: CONNECT ACCOUNTS (DIRECT 1-STEP TOKEN GENERATOR LINK)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
@@ -370,7 +370,7 @@ with tab_accounts:
 
         with st.container(border=True):
             st.markdown("#### 💼 3. LinkedIn")
-            st.link_button("🔗 Direct LinkedIn Token Generator", "https://www.linkedin.com/developers/tools/oauth", use_container_width=True)
+            st.link_button("🔗 Direct LinkedIn Token Generator", "https://www.linkedin.com/developers/tools/oauth/token-generator", use_container_width=True)
             input_li_token = st.text_input("Paste LinkedIn Token Here:", value=st.session_state["li_token"], type="password", placeholder="AQUg...")
 
         if st.button("✨ Save & Connect All Accounts / सभी अकाउंट्स कनेक्ट करें", type="primary", use_container_width=True):
