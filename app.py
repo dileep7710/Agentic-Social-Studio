@@ -3,7 +3,6 @@ import os
 import random
 import tempfile
 import urllib.parse
-import ollama
 import httpx
 from pathlib import Path
 from PIL import Image
@@ -21,13 +20,13 @@ from social_tools import (
 
 # Page Configuration
 st.set_page_config(
-    page_title="Agentic AI Omni-Studio",
+    page_title="Agentic AI Omni-Studio | Production SaaS Edition",
     page_icon="🌌",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Curated High-Impact Neural Quotes for Zero-Failure Cloud Mode
+# Curated High-Impact Neural Quotes for Zero-Failure Mode
 INSPIRING_QUOTES = [
     "The secret of getting ahead is getting started.",
     "Do what you can, with what you have, where you are.",
@@ -46,10 +45,10 @@ INSPIRING_QUOTES = [
     "Consistency is the true DNA of mastery."
 ]
 
-# Clean & Flawless Fantasy CSS Styling
+# Premium Ultra-Fantasy Glassmorphism CSS
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
     html, body, [class*="css"] {
         font-family: 'Plus Jakarta Sans', sans-serif;
@@ -57,6 +56,7 @@ st.markdown("""
 
     .stApp {
         background: radial-gradient(circle at 10% 20%, #17153B 0%, #0F1026 50%, #08071A 100%);
+        color: #F8FAFC;
     }
 
     .fantasy-title {
@@ -77,43 +77,45 @@ st.markdown("""
 
     .glowing-badge {
         display: block;
-        padding: 8px 14px;
+        padding: 10px 14px;
         background: rgba(139, 92, 246, 0.15);
         border: 1px solid rgba(139, 92, 246, 0.4);
-        border-radius: 10px;
+        border-radius: 12px;
         color: #DDD6FE;
-        font-size: 0.9rem;
+        font-size: 0.92rem;
         font-weight: 600;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
     }
 
     .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
+        gap: 12px;
         background-color: transparent;
-        margin-bottom: 15px;
+        margin-bottom: 18px;
     }
 
     .stTabs [data-baseweb="tab"] {
         background: rgba(30, 41, 59, 0.6);
-        border-radius: 10px;
-        padding: 8px 18px;
+        border-radius: 12px;
+        padding: 10px 22px;
         border: 1px solid rgba(255, 255, 255, 0.08);
         color: #94A3B8;
         font-weight: 600;
+        transition: all 0.3s ease;
     }
 
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, #6366F1, #8B5CF6) !important;
         color: #FFFFFF !important;
         border: 1px solid rgba(139, 92, 246, 0.6) !important;
-        box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+        box-shadow: 0 4px 20px rgba(99, 102, 241, 0.45);
     }
 
     [data-testid="stVerticalBlockBorderWrapper"] {
         background: rgba(30, 41, 59, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 14px;
-        padding: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.09) !important;
+        border-radius: 16px;
+        padding: 18px;
+        backdrop-filter: blur(12px);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -180,7 +182,7 @@ def auto_detect_meta(token: str):
                         ig_user = page.get("name", "Instagram User")
                         return fb_name, ig_id, ig_user
             
-            # 3. Direct IG Check
+            # 3. Direct IG Account Check
             r_ig = client.get(f"https://graph.facebook.com/v21.0/{ig_id}?fields=id,username&access_token={token}")
             if r_ig.status_code == 200:
                 d = r_ig.json()
@@ -190,7 +192,7 @@ def auto_detect_meta(token: str):
         pass
     return fb_name, ig_id, ig_user
 
-# Sidebar
+# Sidebar Profile Status
 with st.sidebar:
     st.image("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80", use_container_width=True)
     
@@ -210,8 +212,11 @@ with st.sidebar:
         st.markdown(f'<div class="glowing-badge">💼 LinkedIn: {st.session_state["li_name"]}</div>', unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### 🤖 Multi-Platform Engine")
-    st.caption("Live high-speed CDN + REST APIs for 1-Click Multi-Channel Broadcasting.")
+    st.markdown("### 🤖 Connected 4 Platforms")
+    st.markdown("- 📸 **Instagram** (Stories & Feed Live)")
+    st.markdown("- 📘 **Facebook** (Timeline 1-Click)")
+    st.markdown("- 💼 **LinkedIn** (Official REST API)")
+    st.markdown("- 💬 **WhatsApp** (Direct Delivery)")
 
 # Main Header
 if lang == "English":
@@ -260,6 +265,7 @@ with tab_studio:
                     with st.spinner("🧠 AI is crafting an inspiring quote..."):
                         chosen_quote = random.choice(INSPIRING_QUOTES)
                         try:
+                            import ollama
                             res = ollama.chat(
                                 model="llama3.2:3b",
                                 messages=[{
@@ -285,10 +291,10 @@ with tab_studio:
             st.markdown("### 🎯 2. Social Destinations (All 4 Networks) / सोशल मीडिया")
             
             # Connection Status Hints
-            ig_status_icon = "🟢" if st.session_state["ig_token"] else "⚪ (Token required in Tab 2)"
+            ig_status_icon = f"🟢 ({st.session_state['ig_user']})" if st.session_state["ig_token"] else "⚪ (Token required in Tab 2)"
             fb_status_icon = f"🟢 ({st.session_state['fb_name']})" if st.session_state["fb_name"] else "🟢 Ready"
-            li_status_icon = "🟢" if st.session_state["li_token"] else "⚪ (Token required in Tab 2)"
-            wa_status_icon = "🟢" if st.session_state["phone"] else "⚪ (Phone required in Tab 2)"
+            li_status_icon = f"🟢 ({st.session_state['li_name']})" if st.session_state["li_token"] else "⚪ (Token required in Tab 2)"
+            wa_status_icon = f"🟢 ({st.session_state['phone']})" if st.session_state["phone"] else "⚪ (Phone required in Tab 2)"
             
             c1, c2 = st.columns(2)
             with c1:
@@ -409,7 +415,7 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (DIRECT 1-STEP TOKEN GENERATOR LINK)
+# TAB 2: CONNECT ACCOUNTS (PERMANENT ZERO-FAIL TOKEN GENERATORS)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
