@@ -19,7 +19,7 @@ from social_tools import (
 
 # Page Configuration
 st.set_page_config(
-    page_title="Agentic AI Omni-Studio | Cloud Edition",
+    page_title="Agentic AI Omni-Studio | 4-Platform Edition",
     page_icon="🌌",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -97,7 +97,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Session State with 100% Clean Neutral Defaults
+# Initialize Session State
 if "watermark" not in st.session_state:
     st.session_state["watermark"] = ""
 if "phone" not in st.session_state:
@@ -110,42 +110,6 @@ if "li_token" not in st.session_state:
     st.session_state["li_token"] = ""
 if "li_urn" not in st.session_state:
     st.session_state["li_urn"] = ""
-if "li_name" not in st.session_state:
-    st.session_state["li_name"] = "Guest User"
-
-# Helper: Auto-Detect LinkedIn Profile Name & URN from Token
-def auto_detect_linkedin(token: str):
-    if not token:
-        return None, None
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            r = client.get("https://api.linkedin.com/v2/userinfo", headers={"Authorization": f"Bearer {token}"})
-            if r.status_code == 200:
-                data = r.json()
-                sub = data.get("sub")
-                name = data.get("name", "Connected User")
-                if sub:
-                    return f"urn:li:person:{sub}", name
-    except Exception:
-        pass
-    return None, None
-
-# Helper: Auto-Detect Instagram Business Account ID from Token
-def auto_detect_instagram(token: str):
-    if not token:
-        return None
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            r = client.get(f"https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account,name&access_token={token}")
-            if r.status_code == 200:
-                data = r.json().get("data", [])
-                for page in data:
-                    ig_acc = page.get("instagram_business_account", {})
-                    if "id" in ig_acc:
-                        return ig_acc["id"]
-    except Exception:
-        pass
-    return None
 
 # Sidebar
 with st.sidebar:
@@ -154,28 +118,31 @@ with st.sidebar:
     lang = st.radio("🌐 Language / भाषा:", ["English", "हिन्दी (Hindi)"], horizontal=True)
     
     st.markdown("---")
-    st.markdown("### 👤 Active Profile / यूजर प्रोफाइल")
+    st.markdown("### 👤 Active Profile / एक्टिव यूजर")
     display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Guest User"
     display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
     st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="glowing-badge">💬 Phone: {display_phone}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="glowing-badge">💬 WhatsApp: {display_phone}</div>', unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### 🛡️ Privacy & Encryption")
-    st.caption("🔒 100% Private local architecture. Zero cloud tracking. No hardcoded personal data.")
+    st.markdown("### 🤖 Connected 4 Platforms")
+    st.markdown("- 📸 **Instagram** (Stories & Feed)")
+    st.markdown("- 📘 **Facebook** (Timeline Direct)")
+    st.markdown("- 💼 **LinkedIn** (Professional Post)")
+    st.markdown("- 💬 **WhatsApp** (Silent Delivery)")
 
 # Main Header
 if lang == "English":
     st.markdown('<div class="fantasy-title">🌌 Agentic AI Omni-Studio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">Zero-Configuration Multi-Platform Social Studio for Everyone</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">Broadcast to Instagram, Facebook, LinkedIn & WhatsApp in 1-Click</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="fantasy-title">🌌 एजेंटिक AI ऑम्नी-स्टूडियो</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">बिना किसी टेक्निकल झंझट के एक-क्लिक में सोशल मीडिया पर पोस्ट करें</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">इंस्टाग्राम, फेसबुक, लिंक्डइन और व्हाट्सएप पर 1-क्लिक में पोस्ट करें</div>', unsafe_allow_html=True)
 
 # Tabs
 tab_studio, tab_accounts, tab_guide = st.tabs([
     "🔮 Studio / पोस्ट स्टूडियो", 
-    "⚙️ Connect Accounts / अकाउंट्स जोड़ें", 
+    "⚙️ Connect Accounts / 4 अकाउंट्स जोड़ें", 
     "📖 Easy Guide / सरल मदद"
 ])
 
@@ -230,15 +197,15 @@ with tab_studio:
             )
 
         with st.container(border=True):
-            st.markdown("### 🎯 2. Social Destinations / सोशल मीडिया चुनें")
+            st.markdown("### 🎯 2. Social Destinations (All 4 Networks) / सोशल मीडिया")
             c1, c2 = st.columns(2)
             with c1:
                 target_insta_story = st.checkbox("📸 Instagram Story (24h)", value=True)
                 target_insta_feed = st.checkbox("🖼️ Instagram Feed Post", value=False)
             with c2:
-                target_fb = st.checkbox("📘 Facebook Timeline", value=True)
-                target_li = st.checkbox("💼 LinkedIn Feed", value=False)
-                target_wa = st.checkbox("💬 WhatsApp Delivery", value=True)
+                target_fb = st.checkbox("📘 Facebook Timeline Post", value=True)
+                target_li = st.checkbox("💼 LinkedIn Professional Feed", value=False)
+                target_wa = st.checkbox("💬 WhatsApp Direct Message", value=True)
 
         # Action Buttons
         b1, b2 = st.columns([1, 1.3])
@@ -341,30 +308,31 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (100% NEUTRAL & BLANK DEFAULTS)
+# TAB 2: CONNECT ACCOUNTS (ALL 4 PLATFORMS CLEARLY)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
-        st.markdown("### 🌟 Auto-Connect Accounts / अकाउंट्स जोड़ें")
-        st.markdown("Koi bhi user yahan apna signature naam aur WhatsApp number daalkar save kar sakta hai:")
+        st.markdown("### 🌟 Auto-Connect All 4 Platforms / चारों अकाउंट्स जोड़ें")
+        st.markdown("Yahan par **Instagram, Facebook, LinkedIn aur WhatsApp** chaaron ke connections diye gaye hain:")
 
     col_u1, col_u2 = st.columns(2)
     with col_u1:
         with st.container(border=True):
-            st.markdown("#### 👤 1. Branding & Profile")
-            u_name = st.text_input("Aapka Naam / Signature Name", value=st.session_state["watermark"], placeholder="e.g. Rahul Sharma / आपका नाम")
-            u_phone = st.text_input("WhatsApp Number (with +91)", value=st.session_state["phone"], placeholder="e.g. +919876543210")
+            st.markdown("#### 👤 1. User Profile & WhatsApp")
+            u_name = st.text_input("Aapka Naam / Signature Name", value=st.session_state["watermark"], placeholder="e.g. Anoop Gupta / आपका नाम")
+            u_phone = st.text_input("💬 WhatsApp Number (with +91)", value=st.session_state["phone"], placeholder="e.g. +919336599302")
             if st.button("💾 Save Profile / नाम सेव करें", type="primary", use_container_width=True):
                 st.session_state["watermark"] = u_name
                 st.session_state["phone"] = u_phone
-                st.success(f"🎉 Saved! Watermark set to '-- {u_name}'")
+                st.success(f"🎉 Saved! Watermark set to '-- {u_name}' & WhatsApp to '{u_phone}'")
 
     with col_u2:
         with st.container(border=True):
-            st.markdown("#### 🔑 2. Custom Social Accounts (Optional)")
-            st.markdown("Custom account add karne ke liye direct 1-click links:")
-            st.link_button("🔗 Get Instagram Token", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
-            st.link_button("🔗 Get LinkedIn Token", "https://www.linkedin.com/developers/tools/oauth", use_container_width=True)
+            st.markdown("#### 🌐 2. Social Network Connectors")
+            st.markdown("📘 **Facebook & 📸 Instagram (Meta):**")
+            st.link_button("🔗 Connect Facebook & Instagram (1-Click)", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
+            st.markdown("💼 **LinkedIn Professional:**")
+            st.link_button("🔗 Connect LinkedIn (1-Click)", "https://www.linkedin.com/developers/tools/oauth", use_container_width=True)
 
 # ==========================================
 # TAB 3: EASY GUIDE & HELP
@@ -376,7 +344,7 @@ with tab_guide:
         1. **Choose Your Content / कंटेंट चुनें:**
            - Select **"Upload Photo/Video from PC"** to pick any photo or video from your computer.
            - OR click **"Auto-Generate Quote"** to let Llama 3.2 AI craft a 4K nature graphic automatically!
-        2. **Select Target Platforms / सोशल मीडिया चुनें:**
+        2. **Select Target Platforms (All 4 Networks) / सोशल मीडिया चुनें:**
            - Tick the checkboxes for where you want to post: **Instagram, Facebook, LinkedIn, or WhatsApp**.
         3. **Click Launch / पोस्ट करें:**
            - Hit **"🚀 Launch Multi-Platform Post"** and watch your content publish across all channels simultaneously!
