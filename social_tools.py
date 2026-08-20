@@ -58,8 +58,8 @@ def create_nature_quote_image(quote_text: str, author: str = None, is_story: boo
     bg = enhancer.enhance(0.50)
 
     # Frosted Glass Card
-    card_w = int(width * 0.86)
-    card_h = int(height * 0.48) if is_story else int(height * 0.65)
+    card_w = int(width * 0.88)
+    card_h = int(height * 0.52) if is_story else int(height * 0.68)
     card_x0 = (width - card_w) // 2
     card_y0 = (height - card_h) // 2
     card_x1 = card_x0 + card_w
@@ -67,22 +67,30 @@ def create_nature_quote_image(quote_text: str, author: str = None, is_story: boo
 
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
-    overlay_draw.rounded_rectangle([card_x0, card_y0, card_x1, card_y1], radius=32, fill=(15, 23, 42, 180), outline=(255, 255, 255, 60), width=3)
+    overlay_draw.rounded_rectangle([card_x0, card_y0, card_x1, card_y1], radius=36, fill=(15, 23, 42, 205), outline=(255, 255, 255, 90), width=4)
 
     final_img = Image.alpha_composite(bg, overlay)
     draw = ImageDraw.Draw(final_img)
 
-    try:
-        font_header = ImageFont.truetype("arialbd.ttf", 26)
-        font_quote = ImageFont.truetype("arialbd.ttf", 46)
-        font_author = ImageFont.truetype("arial.ttf", 32)
-    except Exception:
-        font_header = ImageFont.load_default()
-        font_quote = ImageFont.load_default()
-        font_author = ImageFont.load_default()
+    # Cross-Platform Scalable High-Res Typography
+    def get_scaled_font(size: int, bold: bool = True):
+        font_names = ["DejaVuSans-Bold.ttf", "arialbd.ttf", "LiberationSans-Bold.ttf"] if bold else ["DejaVuSans.ttf", "arial.ttf", "LiberationSans-Regular.ttf"]
+        for fn in font_names:
+            try:
+                return ImageFont.truetype(fn, size)
+            except Exception:
+                continue
+        try:
+            return ImageFont.load_default(size=size)
+        except Exception:
+            return ImageFont.load_default()
+
+    font_header = get_scaled_font(size=30, bold=True)
+    font_quote = get_scaled_font(size=56, bold=True)
+    font_author = get_scaled_font(size=40, bold=True)
 
     # Header Accent
-    draw.text((width // 2, card_y0 + 50), "- NATURE & MIND -", fill=(203, 213, 225, 200), font=font_header, anchor="mm")
+    draw.text((width // 2, card_y0 + 60), "- WISDOM & SUCCESS -", fill=(203, 213, 225, 230), font=font_header, anchor="mm")
 
     # Wrapped Quote
     words = quote_text.split()
@@ -90,20 +98,23 @@ def create_nature_quote_image(quote_text: str, author: str = None, is_story: boo
     curr = []
     for w in words:
         curr.append(w)
-        if len(" ".join(curr)) > 26:
+        if len(" ".join(curr)) > 22:
             lines.append(" ".join(curr[:-1]))
             curr = [w]
     if curr:
         lines.append(" ".join(curr))
 
-    y_offset = card_y0 + (card_h // 2) - (len(lines) * 28) - 20
+    line_spacing = 72
+    total_text_h = len(lines) * line_spacing
+    y_offset = card_y0 + (card_h // 2) - (total_text_h // 2) + 10
+
     for line in lines:
         draw.text((width // 2, y_offset), line, fill=(255, 255, 255, 255), font=font_quote, anchor="mm")
-        y_offset += 64
+        y_offset += line_spacing
 
     # Signature Watermark
     watermark_display = f"-- {author}"
-    draw.text((width // 2, card_y1 - 60), watermark_display, fill=(251, 191, 36, 255), font=font_author, anchor="mm")
+    draw.text((width // 2, card_y1 - 65), watermark_display, fill=(251, 191, 36, 255), font=font_author, anchor="mm")
 
     final_img = final_img.convert("RGB")
     out_path = Path(__file__).parent / "nature_quote.png"
