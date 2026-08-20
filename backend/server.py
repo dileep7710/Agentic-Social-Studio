@@ -63,6 +63,8 @@ class ProfileUpdateRequest(BaseModel):
 class PublishRequest(BaseModel):
     content: str
     whatsapp_phone: Optional[str] = None
+    media_url: Optional[str] = None
+    is_video: Optional[bool] = False
 
 
 # ==========================================
@@ -212,14 +214,42 @@ def get_social_status():
     }
 
 
-@app.post("/api/social/publish")
-def direct_social_publish(req: PublishRequest):
-    img_path = create_nature_quote_image(req.content, author="AI Studio", is_story=True)
-    cdn_url = upload_local_file(img_path)
-    res = broadcast_all_platforms(content=req.content, whatsapp_phone=req.whatsapp_phone)
+from fastapi import UploadFile, File
+import tempfile
+from pathlib import Path
+
+@app.post("/api/social/upload-file")
+async def upload_custom_media(file: UploadFile = File(...)):
+    suffix = Path(file.filename).suffix.lower()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tfile:
+        content = await file.read()
+        tfile.write(content)
+        temp_path = tfile.name
+
+    cdn_url = upload_local_file(temp_path)
+    is_video = suffix in [".mp4", ".mov", ".avi"]
     return {
         "status": "success",
-        "cdn_url": cdn_url,
+        "filename": file.filename,
+        "media_url": cdn_url or temp_path,
+        "is_video": is_video
+    }
+
+
+@app.post("/api/social/publish")
+def direct_social_publish(req: PublishRequest):
+    if req.media_url:
+        final_media_url = req.media_url
+        res = broadcast_all_platforms(content=req.content, whatsapp_phone=req.whatsapp_phone)
+    else:
+        img_path = create_nature_quote_image(req.content, author="AI Studio", is_story=True)
+        final_media_url = upload_local_file(img_path)
+        res = broadcast_all_platforms(content=req.content, whatsapp_phone=req.whatsapp_phone)
+
+    return {
+        "status": "success",
+        "cdn_url": final_media_url,
+        "is_video": req.is_video,
         "detail": res
     }
 
