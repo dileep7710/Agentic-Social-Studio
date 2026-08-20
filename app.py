@@ -352,47 +352,34 @@ with tab_studio:
 
         # 1. Instagram Story
         if target_insta_story:
-            if st.session_state["ig_token"]:
-                with st.spinner("📸 Broadcasting to Instagram Story (24h)..."):
-                    res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
-                    with res_col1:
-                        if "Published" in res or "Live" in res:
-                            st.success("✅ **Instagram Story (24h):** Published Live!")
-                        else:
-                            st.info(f"📸 **Instagram Story Notice:** {res}")
-            else:
+            with st.spinner("📸 Broadcasting to Instagram Story (24h)..."):
+                res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
                 with res_col1:
-                    st.link_button("📸 Open Instagram Story", "https://www.instagram.com/", use_container_width=True)
+                    if "Published" in res or "Live" in res:
+                        st.success("✅ **Instagram Story (24h):** Published Live!")
+                    else:
+                        st.link_button("📸 Open Instagram Story", "https://www.instagram.com/", use_container_width=True)
 
         # 2. Instagram Feed
         if target_insta_feed:
-            if st.session_state["ig_token"]:
-                with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
-                    res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
-                    with res_col1:
-                        if "Published" in res or "Live" in res:
-                            st.success("✅ **Instagram Feed Post:** Published Live!")
-                        else:
-                            st.info(f"🖼️ **Instagram Feed Notice:** {res}")
-            else:
+            with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
+                res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
                 with res_col1:
-                    st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
+                    if "Published" in res or "Live" in res:
+                        st.success("✅ **Instagram Feed Post:** Published Live!")
+                    else:
+                        st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
 
-        # 3. LinkedIn (Automatic API if token, plus instant 1-Click web share)
+        # 3. LinkedIn (Live API Posting + Instant 1-Click Web Share)
         if target_li:
-            if st.session_state["li_token"]:
-                with st.spinner("💼 Broadcasting to LinkedIn Feed..."):
-                    res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"], author=active_author)
-                    with res_col2:
-                        if "Published" in res or "Live" in res:
-                            st.success("✅ **LinkedIn Feed:** Published Live!")
-                        else:
-                            li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
-                            st.link_button("💼 1-Click Share to LinkedIn Feed", li_share_url, use_container_width=True)
-            else:
+            with st.spinner("💼 Broadcasting to LinkedIn Feed..."):
+                res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"] or None, author_urn=st.session_state["li_urn"] or None, author=active_author)
                 with res_col2:
-                    li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
-                    st.link_button("💼 1-Click Share to LinkedIn Feed", li_share_url, use_container_width=True)
+                    if "Published" in res or "Live" in res:
+                        st.success("✅ **LinkedIn Feed:** Published Live!")
+                    else:
+                        li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
+                        st.link_button("💼 1-Click Share to LinkedIn Feed", li_share_url, use_container_width=True)
 
         # 4. Facebook (Universal 1-Click Timeline & Feed Post)
         if target_fb:
