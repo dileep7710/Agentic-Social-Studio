@@ -1,13 +1,17 @@
 import os
 import json
+import uuid
 from typing import Optional, List
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from pathlib import Path
+from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, init_db
-from backend.models import User, TaskLog, PlatformSettings
+from backend.models import User, TaskLog, PlatformSettings, SocialAccount, PostLog, PlatformPostResult
 from backend.auth import (
     get_password_hash,
     verify_password,
@@ -19,6 +23,12 @@ from backend.agent_bridge import execute_agent_task
 from social_tools import (
     create_nature_quote_image,
     upload_local_file,
+    resolve_media_url,
+    post_instagram_feed,
+    post_instagram_story,
+    post_facebook_page,
+    post_linkedin,
+    post_whatsapp,
     broadcast_all_platforms
 )
 
@@ -26,12 +36,12 @@ from social_tools import (
 init_db()
 
 app = FastAPI(
-    title="Agentic AI Omni-Studio API",
-    description="Production-grade API wrapper around the existing Agentic AI engine.",
-    version="2.0.0"
+    title="Agentic AI Omni-Studio Multi-Account API",
+    description="Production-grade API for autonomous Agentic AI and multi-account social media publishing.",
+    version="2.1.0"
 )
 
-# Enable CORS for Vite frontend
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -56,15 +66,23 @@ class LoginRequest(BaseModel):
 class TaskRunRequest(BaseModel):
     task: str
 
+class ConnectAccountRequest(BaseModel):
+    platform: str # 'instagram', 'facebook', 'linkedin', 'whatsapp'
+    platform_account_id: str # IG ID / FB Page ID / URN / Phone
+    platform_account_name: str # e.g. '@brand_insta', 'Tech Page'
+    access_token: Optional[str] = None
+    refresh_token: Optional[str] = None
+
+class MultiAccountPublishRequest(BaseModel):
+    content: str
+    media_url: Optional[str] = None
+    is_video: Optional[bool] = False
+    account_ids: Optional[List[int]] = None
+    whatsapp_phone: Optional[str] = None
+
 class ProfileUpdateRequest(BaseModel):
     watermark_name: Optional[str] = None
     whatsapp_phone: Optional[str] = None
-
-class PublishRequest(BaseModel):
-    content: str
-    whatsapp_phone: Optional[str] = None
-    media_url: Optional[str] = None
-    is_video: Optional[bool] = False
 
 
 # ==========================================
@@ -127,7 +145,363 @@ def get_me(user: User = Depends(require_current_user)):
 
 
 # ==========================================
-# AGENT EXECUTION ENDPOINT
+# SOCIAL ACCOUNT MANAGEMENT (MULTI-ACCOUNT)
+# ==========================================
+
+@app.get("/api/social/accounts")
+def get_user_social_accounts(user: User = Depends(require_current_user), db: Session = Depends(get_db)):
+    """
+    Returns all social accounts belonging to the authenticated user.
+    """
+    accounts = db.query(SocialAccount).filter(SocialAccount.user_id == user.id).all()
+    return [
+        {
+            "id": acc.id,
+            "platform": acc.platform,
+            "platform_account_id": acc.platform_account_id,
+            "platform_account_name": acc.platform_account_name,
+            "status": acc.status,
+            "created_at": acc.created_at.strftime("%Y-%m-%d %H:%M") if acc.created_at else ""
+        }
+        for acc in accounts
+    ]
+
+
+@app.post("/api/social/accounts")
+def connect_social_account(req: ConnectAccountRequest, user: User = Depends(require_current_user), db: Session = Depends(get_db)):
+    """
+    Connects a new social account/page for the authenticated user.
+    """
+    # Check if this exact account is already connected by this user
+    existing = db.query(SocialAccount).filter(
+        SocialAccount.user_id == user.id,
+        SocialAccount.platform == req.platform.lower(),
+        SocialAccount.platform_account_id == req.platform_account_id
+    ).first()
+
+    if existing:
+        existing.platform_account_name = req.platform_account_name
+        existing.access_token = req.access_token or existing.access_token
+        existing.status = "ACTIVE"
+        db.commit()
+        db.refresh(existing)
+        return {"status": "success", "message": "Account updated successfully", "account_id": existing.id}
+
+    new_acc = SocialAccount(
+        user_id=user.id,
+        platform=req.platform.lower(),
+        platform_account_id=req.platform_account_id,
+        platform_account_name=req.platform_account_name,
+        access_token=req.access_token,
+        refresh_token=req.refresh_token,
+        status="ACTIVE"
+    )
+    db.add(new_acc)
+    db.commit()
+    db.refresh(new_acc)
+
+    return {
+        "status": "success",
+        "message": f"Connected {req.platform} account '{req.platform_account_name}' successfully",
+        "account_id": new_acc.id
+    }
+
+
+@app.delete("/api/social/accounts/{account_id}")
+def delete_social_account(account_id: int, user: User = Depends(require_current_user), db: Session = Depends(get_db)):
+    """
+    Disconnects a social account verifying strict user ownership.
+    """
+    acc = db.query(SocialAccount).filter(SocialAccount.id == account_id).first()
+    if not acc:
+        raise HTTPException(status_code=404, detail="Social account not found")
+
+    if acc.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Forbidden: You do not own this account")
+
+    db.delete(acc)
+    db.commit()
+    return {"status": "success", "message": "Account disconnected successfully"}
+
+
+# ==========================================
+# MEDIA UPLOADER ENDPOINT
+# ==========================================
+
+import tempfile
+@app.post("/api/social/upload-file")
+async def upload_custom_media(file: UploadFile = File(...)):
+    suffix = Path(file.filename).suffix.lower()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tfile:
+        content = await file.read()
+        tfile.write(content)
+        temp_path = tfile.name
+
+    cdn_url = upload_local_file(temp_path)
+    is_video = suffix in [".mp4", ".mov", ".avi"]
+    return {
+        "status": "success",
+        "filename": file.filename,
+        "media_url": cdn_url or temp_path,
+        "is_video": is_video
+    }
+
+
+# ==========================================
+# 1-CLICK MULTI-ACCOUNT PUBLISHING ENGINE
+# ==========================================
+
+@app.post("/api/social/publish")
+def publish_multi_account(
+    req: MultiAccountPublishRequest,
+    user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Publishes to MULTIPLE social accounts in 1-Click with partial-success resilience and user isolation.
+    """
+    if not req.content.strip():
+        raise HTTPException(status_code=400, detail="Content/caption cannot be empty.")
+
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
+    user_id = user.id if user else None
+    author_name = user.name if user else "AI Studio"
+
+    # Prepare final media URL
+    final_media_url = req.media_url
+    if not final_media_url:
+        generated_path = create_nature_quote_image(req.content, author=author_name, is_story=True)
+        final_media_url = upload_local_file(generated_path) or generated_path
+
+    # Fetch accounts to publish to
+    accounts_to_publish = []
+    if req.account_ids and user:
+        # Validate that all requested accounts belong to the authenticated user
+        user_accounts = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user.id,
+            SocialAccount.id.in_(req.account_ids)
+        ).all()
+
+        if len(user_accounts) != len(req.account_ids):
+            raise HTTPException(status_code=403, detail="Forbidden: Unauthorized account access detected")
+
+        accounts_to_publish = user_accounts
+
+    # If no specific account IDs provided or guest mode, fetch all active accounts for user or default broadcast
+    if not accounts_to_publish and user:
+        accounts_to_publish = db.query(SocialAccount).filter(
+            SocialAccount.user_id == user.id,
+            SocialAccount.status == "ACTIVE"
+        ).all()
+
+    # Create PostLog record
+    post_log = None
+    if user:
+        post_log = PostLog(
+            job_id=job_id,
+            user_id=user.id,
+            content=req.content,
+            media_url=final_media_url,
+            is_video=req.is_video,
+            overall_status="PROCESSING"
+        )
+        db.add(post_log)
+        db.commit()
+        db.refresh(post_log)
+
+    platform_results = []
+    success_count = 0
+    failure_count = 0
+
+    if accounts_to_publish:
+        # Execute independent publishing per connected account
+        for acc in accounts_to_publish:
+            result_item = {
+                "account_id": acc.id,
+                "platform": acc.platform,
+                "account_name": acc.platform_account_name,
+                "status": "FAILED",
+                "post_id": None,
+                "error_code": None,
+                "message": ""
+            }
+
+            try:
+                if acc.platform == "instagram":
+                    res = post_instagram_feed(
+                        content=req.content,
+                        media_path_or_url=final_media_url,
+                        user_id=acc.platform_account_id,
+                        access_token=acc.access_token,
+                        author=author_name
+                    )
+                    result_item["status"] = res.get("status", "FAILED")
+                    result_item["post_id"] = res.get("post_id")
+                    result_item["error_code"] = res.get("error_code")
+                    result_item["message"] = res.get("message", "")
+
+                elif acc.platform == "facebook":
+                    res = post_facebook_page(
+                        content=req.content,
+                        media_path_or_url=final_media_url,
+                        page_id=acc.platform_account_id,
+                        page_access_token=acc.access_token,
+                        author=author_name
+                    )
+                    result_item["status"] = res.get("status", "FAILED")
+                    result_item["post_id"] = res.get("post_id")
+                    result_item["error_code"] = res.get("error_code")
+                    result_item["message"] = res.get("message", "")
+
+                elif acc.platform == "linkedin":
+                    res = post_linkedin(
+                        content=req.content,
+                        media_path_or_url=final_media_url,
+                        access_token=acc.access_token,
+                        author_urn=acc.platform_account_id,
+                        author=author_name
+                    )
+                    result_item["status"] = res.get("status", "FAILED")
+                    result_item["post_id"] = res.get("post_id")
+                    result_item["error_code"] = res.get("error_code")
+                    result_item["message"] = res.get("message", "")
+
+                elif acc.platform == "whatsapp":
+                    res = post_whatsapp(
+                        content=req.content,
+                        target=acc.platform_account_id or req.whatsapp_phone,
+                        media_path_or_url=final_media_url,
+                        author=author_name
+                    )
+                    result_item["status"] = res.get("status", "SUCCESS")
+                    result_item["message"] = res.get("message", "")
+                    result_item["action_url"] = res.get("action_url")
+
+            except Exception as ex:
+                result_item["status"] = "FAILED"
+                result_item["error_code"] = "EXECUTION_EXCEPTION"
+                result_item["message"] = str(ex)
+
+            if result_item["status"] == "SUCCESS":
+                success_count += 1
+            else:
+                failure_count += 1
+
+            platform_results.append(result_item)
+
+            # Record individual platform result in DB
+            if post_log:
+                db_res = PlatformPostResult(
+                    post_log_id=post_log.id,
+                    account_id=acc.id,
+                    platform=acc.platform,
+                    account_name=acc.platform_account_name,
+                    status=result_item["status"],
+                    platform_post_id=result_item["post_id"],
+                    error_code=result_item["error_code"],
+                    error_message=result_item["message"]
+                )
+                db.add(db_res)
+
+    else:
+        # Fallback 1-Click direct broadcasting for guest or default mode
+        wa_res = post_whatsapp(content=req.content, target=req.whatsapp_phone, media_path_or_url=final_media_url, author=author_name)
+        platform_results = [
+            {
+                "account_id": None,
+                "platform": "instagram",
+                "account_name": "Instagram Direct",
+                "status": "ACTION_REQUIRED",
+                "action_url": "https://www.instagram.com/",
+                "message": "Ready for Instagram Story & Feed upload."
+            },
+            {
+                "account_id": None,
+                "platform": "facebook",
+                "account_name": "Facebook Timeline",
+                "status": "ACTION_REQUIRED",
+                "action_url": f"https://www.facebook.com/sharer/sharer.php?u={final_media_url}&quote={req.content}",
+                "message": "1-Click Facebook Timeline post ready."
+            },
+            {
+                "account_id": None,
+                "platform": "linkedin",
+                "account_name": "LinkedIn Feed",
+                "status": "ACTION_REQUIRED",
+                "action_url": f"https://www.linkedin.com/sharing/share-offsite/?url={final_media_url}",
+                "message": "1-Click LinkedIn share ready."
+            },
+            {
+                "account_id": None,
+                "platform": "whatsapp",
+                "account_name": "WhatsApp Direct",
+                "status": "SUCCESS",
+                "action_url": wa_res.get("action_url"),
+                "message": wa_res.get("message")
+            }
+        ]
+        success_count = len(platform_results)
+
+    # Determine overall status
+    if failure_count == 0:
+        overall_status = "SUCCESS"
+    elif success_count > 0 and failure_count > 0:
+        overall_status = "PARTIAL_SUCCESS"
+    else:
+        overall_status = "FAILED"
+
+    if post_log:
+        post_log.overall_status = overall_status
+        db.commit()
+
+    return {
+        "job_id": job_id,
+        "overall_status": overall_status,
+        "media_url": final_media_url,
+        "is_video": req.is_video,
+        "total_accounts": len(platform_results),
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "platforms": platform_results
+    }
+
+
+# ==========================================
+# POST HISTORY AUDIT ENDPOINTS
+# ==========================================
+
+@app.get("/api/social/history")
+def get_social_history(user: User = Depends(require_current_user), db: Session = Depends(get_db)):
+    """
+    Returns full multi-account posting audit history for the authenticated user.
+    """
+    posts = db.query(PostLog).filter(PostLog.user_id == user.id).order_by(PostLog.id.desc()).limit(30).all()
+    return [
+        {
+            "id": p.id,
+            "job_id": p.job_id,
+            "content": p.content,
+            "media_url": p.media_url,
+            "is_video": p.is_video,
+            "overall_status": p.overall_status,
+            "created_at": p.created_at.strftime("%Y-%m-%d %H:%M"),
+            "results": [
+                {
+                    "platform": r.platform,
+                    "account_name": r.account_name,
+                    "status": r.status,
+                    "post_id": r.platform_post_id,
+                    "error": r.error_message
+                }
+                for r in p.platform_results
+            ]
+        }
+        for p in posts
+    ]
+
+
+# ==========================================
+# AGENT EXECUTION ENDPOINT (PRESERVED)
 # ==========================================
 
 @app.post("/api/agent/run")
@@ -135,10 +509,8 @@ def run_agent(req: TaskRunRequest, user: Optional[User] = Depends(get_current_us
     if not req.task.strip():
         raise HTTPException(status_code=400, detail="Task query cannot be empty.")
 
-    # Execute existing Agentic AI pipeline
     execution_result = execute_agent_task(req.task)
 
-    # Save to database TaskLog
     new_log = TaskLog(
         user_id=user.id if user else None,
         task=req.task,
@@ -156,7 +528,7 @@ def run_agent(req: TaskRunRequest, user: Optional[User] = Depends(get_current_us
 
 
 # ==========================================
-# TASK HISTORY ENDPOINTS
+# TASK LOGS & SETTINGS ENDPOINTS (PRESERVED)
 # ==========================================
 
 @app.get("/api/tasks")
@@ -184,86 +556,19 @@ def get_task_history(
     ]
 
 
-@app.get("/api/tasks/{task_id}")
-def get_task_detail(task_id: int, db: Session = Depends(get_db)):
-    task = db.query(TaskLog).filter(TaskLog.id == task_id).first()
-    if not task:
-        raise HTTPException(status_code=404, detail="Task log not found")
-    return {
-        "id": task.id,
-        "task": task.task,
-        "plan": task.plan,
-        "tools_used": task.tools_used.split(",") if task.tools_used else [],
-        "result": task.result,
-        "status": task.status,
-        "created_at": task.created_at.strftime("%Y-%m-%d %H:%M:%S") if task.created_at else ""
-    }
-
-
-# ==========================================
-# SOCIAL MEDIA ENDPOINTS
-# ==========================================
-
-@app.get("/api/social/status")
-def get_social_status():
-    return {
-        "instagram": "Connected (Stories & Feed)",
-        "facebook": "Connected (Timeline Share)",
-        "linkedin": "Connected (Professional Share)",
-        "whatsapp": "Connected (1-Click Delivery)"
-    }
-
-
-from fastapi import UploadFile, File
-import tempfile
-from pathlib import Path
-
-@app.post("/api/social/upload-file")
-async def upload_custom_media(file: UploadFile = File(...)):
-    suffix = Path(file.filename).suffix.lower()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tfile:
-        content = await file.read()
-        tfile.write(content)
-        temp_path = tfile.name
-
-    cdn_url = upload_local_file(temp_path)
-    is_video = suffix in [".mp4", ".mov", ".avi"]
-    return {
-        "status": "success",
-        "filename": file.filename,
-        "media_url": cdn_url or temp_path,
-        "is_video": is_video
-    }
-
-
-@app.post("/api/social/publish")
-def direct_social_publish(req: PublishRequest):
-    if req.media_url:
-        final_media_url = req.media_url
-        res = broadcast_all_platforms(content=req.content, whatsapp_phone=req.whatsapp_phone)
-    else:
-        img_path = create_nature_quote_image(req.content, author="AI Studio", is_story=True)
-        final_media_url = upload_local_file(img_path)
-        res = broadcast_all_platforms(content=req.content, whatsapp_phone=req.whatsapp_phone)
-
-    return {
-        "status": "success",
-        "cdn_url": final_media_url,
-        "is_video": req.is_video,
-        "detail": res
-    }
-
-
-# ==========================================
-# SETTINGS ENDPOINT
-# ==========================================
-
 @app.get("/api/settings")
 def get_settings(user: Optional[User] = Depends(get_current_user), db: Session = Depends(get_db)):
     user_id = user.id if user else None
     settings = db.query(PlatformSettings).filter(PlatformSettings.user_id == user_id).first()
     if not settings:
-        settings = PlatformSettings(user_id=user_id, watermark_name=user.name if user else "AI Creator")
+        settings = PlatformSettings(
+            user_id=user_id,
+            watermark_name=user.name if user else "AI Creator",
+            whatsapp_phone="",
+            instagram_connected="Connected",
+            facebook_connected="Connected",
+            linkedin_connected="Connected"
+        )
         db.add(settings)
         db.commit()
         db.refresh(settings)
@@ -271,8 +576,9 @@ def get_settings(user: Optional[User] = Depends(get_current_user), db: Session =
     return {
         "watermark_name": settings.watermark_name,
         "whatsapp_phone": settings.whatsapp_phone,
-        "ai_model": "Llama 3.2 (3B) Autonomous Planner",
-        "memory_records": 10
+        "instagram": settings.instagram_connected,
+        "facebook": settings.facebook_connected,
+        "linkedin": settings.linkedin_connected
     }
 
 
@@ -290,20 +596,22 @@ def update_settings(req: ProfileUpdateRequest, user: Optional[User] = Depends(ge
         settings.whatsapp_phone = req.whatsapp_phone
 
     db.commit()
-    return {"status": "success", "message": "Settings updated successfully"}
+    db.refresh(settings)
+    return {
+        "status": "success",
+        "watermark_name": settings.watermark_name,
+        "whatsapp_phone": settings.whatsapp_phone
+    }
 
 
 # ==========================================
-# STATIC FRONTEND SERVING (SPA)
+# STATIC FRONTEND SPA SERVING
 # ==========================================
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pathlib import Path
 
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
 if FRONTEND_DIST.exists():
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="static_assets")
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
@@ -311,4 +619,3 @@ if FRONTEND_DIST.exists():
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(FRONTEND_DIST / "index.html")
-

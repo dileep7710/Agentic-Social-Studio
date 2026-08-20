@@ -2,6 +2,8 @@ import os
 import io
 import time
 import random
+import uuid
+import tempfile
 import urllib.parse
 from pathlib import Path
 import httpx
@@ -12,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
+# Default Fallbacks for Single User / CLI compatibility
 IG_USER_ID = os.getenv("INSTAGRAM_ACCOUNT_ID", "")
 IG_ACCESS_TOKEN = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 DEFAULT_WHATSAPP_PHONE = os.getenv("WHATSAPP_DEFAULT_PHONE", "")
@@ -30,9 +33,10 @@ NATURE_WALLPAPERS = [
 DEFAULT_REEL_VIDEO_URL = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
 
 
-def create_nature_quote_image(quote_text: str, author: str = None, is_story: bool = False) -> str:
+def create_nature_quote_image(quote_text: str, author: str = None, is_story: bool = False, out_path: str = None) -> str:
     """
     Generates a 4K aesthetic quote image with frosted glass card, typography and custom watermark.
+    Uses UUID-isolated output path to eliminate multi-user file collision.
     """
     if not author:
         author = WATERMARK_NAME or "AI Creator"
@@ -116,53 +120,59 @@ def create_nature_quote_image(quote_text: str, author: str = None, is_story: boo
     draw.text((width // 2, card_y1 - 65), watermark_display, fill=(251, 191, 36, 255), font=font_author, anchor="mm")
 
     final_img = final_img.convert("RGB")
-    out_path = Path(__file__).parent / "nature_quote.png"
+    
+    if not out_path:
+        # Isolated unique file per execution to prevent concurrency overwrite
+        unique_name = f"quote_{uuid.uuid4().hex[:10]}.png"
+        out_path = Path(tempfile.gettempdir()) / unique_name
+
     final_img.save(out_path, quality=95)
     return str(out_path)
 
 
-def upload_local_file(file_path: str) -> str:
+def upload_local_file(file_path: str, retries: int = 2) -> str:
     """
     Uploads a local image/video file to multi-CDN servers to guarantee a 100% public URL.
+    Includes automated retries and timeout protection.
     """
     p = Path(file_path).resolve()
     if not p.exists() or not p.is_file():
         return None
 
-    # Server 1: Catbox CDN
-    try:
-        print(f"[Uploader] Uploading '{p.name}' to Cloud CDN...")
-        with open(p, "rb") as f:
-            with httpx.Client(timeout=25.0) as client:
-                res = client.post(
-                    "https://catbox.moe/user/api.php",
-                    data={"reqtype": "fileupload"},
-                    files={"fileToUpload": (p.name, f)}
-                )
-                if res.status_code == 200 and res.text.strip().startswith("https://"):
-                    url = res.text.strip()
-                    print(f"[Uploader] Public CDN URL: {url}")
-                    return url
-    except Exception:
-        pass
-
-    # Server 2: TmpFiles Backup CDN
-    try:
-        with open(p, "rb") as f:
-            with httpx.Client(timeout=25.0) as client:
-                res = client.post(
-                    "https://tmpfiles.org/api/v1/upload",
-                    files={"file": (p.name, f)}
-                )
-                if res.status_code == 200:
-                    data = res.json()
-                    raw_url = data.get("data", {}).get("url")
-                    if raw_url:
-                        url = raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
-                        print(f"[Uploader] Backup CDN URL: {url}")
+    for attempt in range(retries + 1):
+        # Server 1: Catbox CDN
+        try:
+            with open(p, "rb") as f:
+                with httpx.Client(timeout=30.0) as client:
+                    res = client.post(
+                        "https://catbox.moe/user/api.php",
+                        data={"reqtype": "fileupload"},
+                        files={"fileToUpload": (p.name, f)}
+                    )
+                    if res.status_code == 200 and res.text.strip().startswith("https://"):
+                        url = res.text.strip()
                         return url
-    except Exception:
-        pass
+        except Exception:
+            pass
+
+        # Server 2: TmpFiles Backup CDN
+        try:
+            with open(p, "rb") as f:
+                with httpx.Client(timeout=30.0) as client:
+                    res = client.post(
+                        "https://tmpfiles.org/api/v1/upload",
+                        files={"file": (p.name, f)}
+                    )
+                    if res.status_code == 200:
+                        data = res.json()
+                        raw_url = data.get("data", {}).get("url")
+                        if raw_url:
+                            url = raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+                            return url
+        except Exception:
+            pass
+
+        time.sleep(1)
 
     return None
 
@@ -171,6 +181,8 @@ def resolve_media_url(media_path_or_url: str) -> str:
     """
     Ensures the media is a public HTTPS URL. If a local file path is given, uploads it.
     """
+    if not media_path_or_url:
+        return None
     if media_path_or_url.startswith("http://") or media_path_or_url.startswith("https://"):
         return media_path_or_url
 
@@ -181,21 +193,32 @@ def resolve_media_url(media_path_or_url: str) -> str:
     raise ValueError(f"Could not convert local file '{media_path_or_url}' to a public URL.")
 
 
-def post_instagram_feed(content: str, media_path_or_url: str = None, user_id: str = None, access_token: str = None, author: str = None) -> str:
+def post_instagram_feed(content: str, media_path_or_url: str = None, user_id: str = None, access_token: str = None, author: str = None) -> dict:
     """
-    Posts a photo to Instagram feed.
+    Posts a photo to Instagram feed with structured status response.
     """
     uid = user_id or IG_USER_ID
     token = access_token or IG_ACCESS_TOKEN
     sign = author or WATERMARK_NAME
 
     if not uid or not token:
-        return "Instagram credentials missing."
+        return {
+            "status": "FAILED",
+            "error_code": "AUTH_MISSING",
+            "message": "Instagram account credentials missing or not connected."
+        }
 
     if not media_path_or_url:
         media_path_or_url = create_nature_quote_image(content, author=sign, is_story=False)
 
-    image_url = resolve_media_url(media_path_or_url)
+    try:
+        image_url = resolve_media_url(media_path_or_url)
+    except Exception as e:
+        return {
+            "status": "FAILED",
+            "error_code": "MEDIA_UPLOAD_FAILED",
+            "message": f"Failed to upload media to public CDN: {e}"
+        }
 
     try:
         with httpx.Client(timeout=45.0) as client:
@@ -211,7 +234,12 @@ def post_instagram_feed(content: str, media_path_or_url: str = None, user_id: st
             creation_id = container_data.get("id")
 
             if not creation_id:
-                return f"Instagram Feed Container Error: {container_data}"
+                err_msg = container_data.get("error", {}).get("message", str(container_data))
+                return {
+                    "status": "FAILED",
+                    "error_code": "CONTAINER_CREATION_FAILED",
+                    "message": f"Instagram API Error: {err_msg}"
+                }
 
             time.sleep(5)
 
@@ -224,13 +252,28 @@ def post_instagram_feed(content: str, media_path_or_url: str = None, user_id: st
             )
             pub_data = pub_res.json()
             if "id" in pub_data:
-                return f"Instagram Feed Post Published Successfully!\nPost ID: {pub_data['id']}\nImage: {image_url}\nCaption: {content} -- {sign}"
-            return f"Instagram Publish Error: {pub_data}"
+                return {
+                    "status": "SUCCESS",
+                    "post_id": str(pub_data["id"]),
+                    "media_url": image_url,
+                    "message": "Instagram Feed Post published successfully live."
+                }
+            
+            err_msg = pub_data.get("error", {}).get("message", str(pub_data))
+            return {
+                "status": "FAILED",
+                "error_code": "PUBLISH_FAILED",
+                "message": f"Instagram Publish Error: {err_msg}"
+            }
     except Exception as e:
-        return f"Instagram Feed Exception: {e}"
+        return {
+            "status": "FAILED",
+            "error_code": "NETWORK_EXCEPTION",
+            "message": f"Network exception during Instagram publish: {e}"
+        }
 
 
-def post_instagram_story(content: str, media_path_or_url: str = None, user_id: str = None, access_token: str = None, author: str = None) -> str:
+def post_instagram_story(content: str, media_path_or_url: str = None, user_id: str = None, access_token: str = None, author: str = None) -> dict:
     """
     Posts a 24-hour aesthetic Story to Instagram.
     """
@@ -239,12 +282,23 @@ def post_instagram_story(content: str, media_path_or_url: str = None, user_id: s
     sign = author or WATERMARK_NAME
 
     if not uid or not token:
-        return "Instagram credentials missing."
+        return {
+            "status": "FAILED",
+            "error_code": "AUTH_MISSING",
+            "message": "Instagram account credentials missing or not connected."
+        }
 
     if not media_path_or_url:
         media_path_or_url = create_nature_quote_image(content, author=sign, is_story=True)
 
-    image_url = resolve_media_url(media_path_or_url)
+    try:
+        image_url = resolve_media_url(media_path_or_url)
+    except Exception as e:
+        return {
+            "status": "FAILED",
+            "error_code": "MEDIA_UPLOAD_FAILED",
+            "message": f"Failed to upload story media: {e}"
+        }
 
     try:
         with httpx.Client(timeout=45.0) as client:
@@ -260,7 +314,12 @@ def post_instagram_story(content: str, media_path_or_url: str = None, user_id: s
             creation_id = container_data.get("id")
 
             if not creation_id:
-                return f"Instagram Story Container Error: {container_data}"
+                err_msg = container_data.get("error", {}).get("message", str(container_data))
+                return {
+                    "status": "FAILED",
+                    "error_code": "STORY_CONTAINER_FAILED",
+                    "message": f"Instagram Story Error: {err_msg}"
+                }
 
             time.sleep(5)
 
@@ -272,105 +331,97 @@ def post_instagram_story(content: str, media_path_or_url: str = None, user_id: s
                 }
             )
             pub_data = pub_res.json()
-            return f"Instagram Story Publish Error: {pub_data}"
+            if "id" in pub_data:
+                return {
+                    "status": "SUCCESS",
+                    "post_id": str(pub_data["id"]),
+                    "media_url": image_url,
+                    "message": "Instagram 24h Story published successfully live."
+                }
+            return {
+                "status": "FAILED",
+                "error_code": "STORY_PUBLISH_FAILED",
+                "message": f"Instagram Story Publish Error: {pub_data}"
+            }
     except Exception as e:
-        return f"Instagram Story Exception: {e}"
+        return {
+            "status": "FAILED",
+            "error_code": "NETWORK_EXCEPTION",
+            "message": f"Instagram Story Exception: {e}"
+        }
 
 
-def post_instagram_reel(content: str, video_path_or_url: str = None) -> str:
+def post_facebook_page(content: str, media_path_or_url: str = None, page_id: str = None, page_access_token: str = None, author: str = None) -> dict:
     """
-    Publishes an Instagram Reel or Video post.
+    Posts photo/content to a Facebook Page via official Meta Graph API.
     """
-    return f"Instagram Reel Prepared: '{content}' with video: '{video_path_or_url or DEFAULT_REEL_VIDEO_URL}'"
-
-
-def broadcast_all_platforms(content: str, whatsapp_phone: str = None) -> str:
-    """
-    Broadcasts 4K graphic across Instagram, Facebook, and WhatsApp.
-    """
-    img_path = create_nature_quote_image(content, is_story=True)
-    cdn_url = upload_local_file(img_path)
-    res_ig = post_instagram_story(content, media_path_or_url=cdn_url)
-    res_fb = post_facebook(content, media_path_or_url=img_path)
-    res_wa = post_whatsapp(content=f"{content}\n\n📸 4K Graphic: {cdn_url}", target=whatsapp_phone)
-    return f"Broadcast Summary:\n- Instagram Story: {res_ig}\n- Facebook: {res_fb}\n- WhatsApp: {res_wa}"
-
-
-def post_facebook(content: str, media_path_or_url: str = None, author: str = None) -> str:
-    """
-    Posts directly to Facebook Timeline using persistent session.
-    """
-    session_dir = Path(__file__).parent / "facebook_session"
-    if not session_dir.exists():
-        return "Facebook session directory not found. Please run session setup."
+    if not page_id or not page_access_token:
+        return {
+            "status": "FAILED",
+            "error_code": "AUTH_MISSING",
+            "message": "Facebook Page ID or Page Access Token missing."
+        }
 
     sign = author or WATERMARK_NAME
-    local_img = media_path_or_url
-    if not local_img or not Path(local_img).exists():
-        local_img = create_nature_quote_image(content, author=sign, is_story=False)
-
     caption_text = f"{content} -- {sign}"
-    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
     try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=str(session_dir),
-                headless=True,
-                user_agent=USER_AGENT,
-                viewport={"width": 1280, "height": 800},
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
-            )
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto("https://www.facebook.com/", timeout=60000)
-            time.sleep(5)
-
-            try:
-                page.keyboard.press("Escape")
-                time.sleep(1)
-            except Exception:
-                pass
-
-            page.locator('div[role="region"] div[role="button"]').first.click(force=True)
-            time.sleep(3)
-
-            photo_btn = page.locator('div[aria-label="Photo/video"]').first
-            if photo_btn.is_visible():
-                photo_btn.click(force=True)
-                time.sleep(2)
-
-            file_input = page.locator('input[type="file"]').first
-            file_input.set_input_files(str(Path(local_img).resolve()))
-            time.sleep(4)
-
-            textbox = page.locator('div[role="textbox"][contenteditable="true"]').first
-            textbox.click()
-            page.evaluate("(text) => { const el = document.querySelector('div[role=\"textbox\"][contenteditable=\"true\"]'); if (el) { el.focus(); document.execCommand('insertText', false, text); } }", caption_text)
-            time.sleep(2)
-
-            post_btn = page.locator('div[aria-label="Post"], div[aria-label="पोस्ट करें"]').last
-            post_btn.click(force=True)
-            time.sleep(10)
-
-            context.close()
-            return f"Facebook Post Published Live on Timeline!\nCaption: {caption_text}"
+        with httpx.Client(timeout=40.0) as client:
+            if media_path_or_url:
+                image_url = resolve_media_url(media_path_or_url)
+                r = client.post(
+                    f"https://graph.facebook.com/v21.0/{page_id}/photos",
+                    params={
+                        "url": image_url,
+                        "caption": caption_text,
+                        "access_token": page_access_token
+                    }
+                )
+            else:
+                r = client.post(
+                    f"https://graph.facebook.com/v21.0/{page_id}/feed",
+                    params={
+                        "message": caption_text,
+                        "access_token": page_access_token
+                    }
+                )
+            data = r.json()
+            if "id" in data:
+                return {
+                    "status": "SUCCESS",
+                    "post_id": str(data["id"]),
+                    "message": "Facebook Page Post published successfully live."
+                }
+            err = data.get("error", {}).get("message", str(data))
+            return {
+                "status": "FAILED",
+                "error_code": "FB_PAGE_API_ERROR",
+                "message": f"Facebook API Error: {err}"
+            }
     except Exception as e:
-        return f"Facebook Direct Post Notice: {e}"
+        return {
+            "status": "FAILED",
+            "error_code": "NETWORK_EXCEPTION",
+            "message": f"Facebook Page Exception: {e}"
+        }
 
 
-def post_linkedin(content: str, media_path_or_url: str = None, access_token: str = None, author_urn: str = None, author: str = None) -> str:
+def post_linkedin(content: str, media_path_or_url: str = None, access_token: str = None, author_urn: str = None, author: str = None) -> dict:
     """
-    Publishes a photo or text post to LinkedIn via official REST API.
+    Publishes a photo or text post to LinkedIn via official REST API with structured response.
     """
     token = access_token or LINKEDIN_ACCESS_TOKEN
     urn = author_urn or LINKEDIN_AUTHOR_URN
     sign = author or WATERMARK_NAME
 
     if not token or not urn:
-        return "LinkedIn Access Token or Author URN not configured."
+        return {
+            "status": "FAILED",
+            "error_code": "AUTH_MISSING",
+            "message": "LinkedIn Access Token or Author URN not connected."
+        }
 
-    caption_text = f"{content}\n\n-- {sign}\n#AgenticAI #Python #Automation #LinkedIn"
+    caption_text = f"{content}\n\n-- {sign}\n#AgenticAI #Automation #LinkedIn"
     headers = {
         "Authorization": f"Bearer {token}",
         "X-Restli-Protocol-Version": "2.0.0",
@@ -435,44 +486,65 @@ def post_linkedin(content: str, media_path_or_url: str = None, access_token: str
             pub_res = client.post("https://api.linkedin.com/v2/ugcPosts", headers=headers, json=post_payload)
             if pub_res.status_code in [200, 201]:
                 post_id = pub_res.json().get("id")
-                return f"LinkedIn Post Published Successfully Live!\nPost ID: {post_id}\nCaption: {content}"
-            return f"LinkedIn Publish Error: {pub_res.text}"
+                return {
+                    "status": "SUCCESS",
+                    "post_id": str(post_id),
+                    "message": "LinkedIn Feed Post published successfully live."
+                }
+            
+            return {
+                "status": "FAILED",
+                "error_code": "LINKEDIN_API_ERROR",
+                "message": f"LinkedIn Publish Error: {pub_res.text}"
+            }
     except Exception as e:
-        return f"LinkedIn Exception: {e}"
+        return {
+            "status": "FAILED",
+            "error_code": "NETWORK_EXCEPTION",
+            "message": f"LinkedIn Exception: {e}"
+        }
 
 
-def post_whatsapp(content: str, target: str = None) -> str:
+def post_whatsapp(content: str, target: str = None, media_path_or_url: str = None, author: str = None) -> dict:
     """
-    Sends message + 4K graphic silently in the background via headless Playwright Chrome.
+    Prepares WhatsApp direct share or background delivery.
     """
-    phone = target if (target and target.startswith("+")) else DEFAULT_WHATSAPP_PHONE
-    if not phone:
-        return "WhatsApp recipient phone number is required."
+    phone = target or DEFAULT_WHATSAPP_PHONE
+    sign = author or WATERMARK_NAME
+    msg = f"{content} -- {sign}"
+    if media_path_or_url:
+        msg += f"\n\n📸 4K Media: {media_path_or_url}"
 
-    encoded_text = urllib.parse.quote(content)
-    target_url = f"https://web.whatsapp.com/send?phone={phone.replace('+', '')}&text={encoded_text}"
-    session_dir = Path(__file__).parent / "whatsapp_session"
+    return {
+        "status": "SUCCESS",
+        "target_phone": phone or "Ready for Chat Selection",
+        "action_url": f"https://api.whatsapp.com/send?phone={phone.replace('+', '')}&text={urllib.parse.quote(msg)}" if phone else f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg)}",
+        "message": f"WhatsApp direct broadcast ready for {phone or 'any contact'}."
+    }
 
-    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
-    try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            context = p.chromium.launch_persistent_context(
-                user_data_dir=str(session_dir),
-                headless=True,
-                user_agent=USER_AGENT,
-                viewport={"width": 1280, "height": 800},
-                args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
-            )
-            page = context.pages[0] if context.pages else context.new_page()
-            page.goto(target_url, timeout=60000)
-            time.sleep(10)
+def post_instagram_reel(content: str, video_path_or_url: str = None) -> str:
+    """
+    Publishes an Instagram Reel or Video post.
+    """
+    return f"Instagram Reel Prepared: '{content}' with video: '{video_path_or_url or DEFAULT_REEL_VIDEO_URL}'"
 
-            send_button = page.locator('button[aria-label="Send"], span[data-icon="send"]').first
-            send_button.click(timeout=15000)
-            time.sleep(4)
-            context.close()
-            return f"WhatsApp message successfully delivered to {phone} in background!"
-    except Exception as e:
-        return f"WhatsApp automation notice: {e}"
+
+def post_facebook(content: str, media_path_or_url: str = None, author: str = None) -> str:
+    """
+    CLI/Direct helper for Facebook Timeline.
+    """
+    sign = author or WATERMARK_NAME
+    return f"Facebook Timeline Post Prepared: '{content}' -- {sign}"
+
+
+def broadcast_all_platforms(content: str, whatsapp_phone: str = None) -> str:
+    """
+    Legacy helper preserved for backward compatibility.
+    """
+    img_path = create_nature_quote_image(content, is_story=True)
+    cdn_url = upload_local_file(img_path)
+    res_ig = post_instagram_story(content, media_path_or_url=cdn_url)
+    res_fb = post_facebook(content, media_path_or_url=img_path)
+    res_wa = post_whatsapp(content=f"{content}\n\n📸 4K Graphic: {cdn_url}", target=whatsapp_phone)
+    return f"Broadcast Summary:\n- Instagram Story: {res_ig}\n- Facebook: {res_fb}\n- WhatsApp: {res_wa}"

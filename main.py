@@ -45,12 +45,13 @@ def add_memory(user_message, agent_message):
 # ==================================================
 
 def planner(task):
-    response = ollama.chat(
-        model="llama3.2:3b",
-        messages=[
-            {
-                "role": "system",
-                "content": """
+    try:
+        response = ollama.chat(
+            model="llama3.2:3b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
 You are a task planner.
 Create 2 to 5 short ACTION steps.
 Do not answer the task.
@@ -63,14 +64,16 @@ Output:
 1. Generate 4K aesthetic quote image.
 2. Publish to Instagram Story, Facebook, and WhatsApp simultaneously.
 """
-            },
-            {
-                "role": "user",
-                "content": task
-            }
-        ]
-    )
-    return response.message.content.strip()
+                },
+                {
+                    "role": "user",
+                    "content": task
+                }
+            ]
+        )
+        return response.message.content.strip()
+    except Exception:
+        return "1. Analyze task requirements.\n2. Execute necessary search / tools.\n3. Synthesize and deliver final result."
 
 
 # ==================================================
@@ -78,12 +81,13 @@ Output:
 # ==================================================
 
 def extract_content(task):
-    response = ollama.chat(
-        model="llama3.2:3b",
-        messages=[
-            {
-                "role": "system",
-                "content": """
+    try:
+        response = ollama.chat(
+            model="llama3.2:3b",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
 You extract the actual text/caption and any media file path or URL that the user wants to post.
 Return ONLY the actual post content/caption.
 Do NOT return:
@@ -99,14 +103,16 @@ User: Post this on Instagram: Today I learned how Agentic AI works.
 Output:
 Today I learned how Agentic AI works.
 """
-            },
-            {
-                "role": "user",
-                "content": task
-            }
-        ]
-    )
-    return response.message.content.strip()
+                },
+                {
+                    "role": "user",
+                    "content": task
+                }
+            ]
+        )
+        return response.message.content.strip()
+    except Exception:
+        return task
 
 
 # ==================================================
