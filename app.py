@@ -19,7 +19,7 @@ from social_tools import (
 
 # Page Configuration
 st.set_page_config(
-    page_title="Agentic AI Omni-Studio | 4-Platform Edition",
+    page_title="Agentic AI Omni-Studio",
     page_icon="🌌",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -119,7 +119,7 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 👤 Active Profile / एक्टिव यूजर")
-    display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Guest User"
+    display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Not Set"
     display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
     st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="glowing-badge">💬 WhatsApp: {display_phone}</div>', unsafe_allow_html=True)
@@ -308,7 +308,7 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (ALL 4 PLATFORMS CLEARLY)
+# TAB 2: CONNECT ACCOUNTS (100% BLANK PLACEHOLDERS)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
@@ -319,12 +319,12 @@ with tab_accounts:
     with col_u1:
         with st.container(border=True):
             st.markdown("#### 👤 1. User Profile & WhatsApp")
-            u_name = st.text_input("Aapka Naam / Signature Name", value=st.session_state["watermark"], placeholder="e.g. Anoop Gupta / आपका नाम")
-            u_phone = st.text_input("💬 WhatsApp Number (with +91)", value=st.session_state["phone"], placeholder="e.g. +919336599302")
+            u_name = st.text_input("Aapka Naam / Signature Name", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
+            u_phone = st.text_input("💬 WhatsApp Number (with +91)", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
             if st.button("💾 Save Profile / नाम सेव करें", type="primary", use_container_width=True):
                 st.session_state["watermark"] = u_name
                 st.session_state["phone"] = u_phone
-                st.success(f"🎉 Saved! Watermark set to '-- {u_name}' & WhatsApp to '{u_phone}'")
+                st.success(f"🎉 Saved! Watermark set to '-- {u_name}'")
 
     with col_u2:
         with st.container(border=True):
