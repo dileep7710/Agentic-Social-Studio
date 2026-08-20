@@ -20,7 +20,7 @@ from social_tools import (
 
 # Page Configuration
 st.set_page_config(
-    page_title="Agentic AI Omni-Studio | Production SaaS Edition",
+    page_title="Agentic AI Omni-Studio | Zero-Friction Edition",
     page_icon="🌌",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -166,12 +166,10 @@ def auto_detect_meta(token: str):
     ig_user = "@dileepy18"
     try:
         with httpx.Client(timeout=15.0) as client:
-            # 1. Fetch Facebook User Name
             r_me = client.get(f"https://graph.facebook.com/v21.0/me?fields=name,id&access_token={token}")
             if r_me.status_code == 200:
                 fb_name = r_me.json().get("name", "Connected User")
 
-            # 2. Fetch Connected Pages & Instagram
             r_acc = client.get(f"https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account,name&access_token={token}")
             if r_acc.status_code == 200:
                 data = r_acc.json().get("data", [])
@@ -182,7 +180,6 @@ def auto_detect_meta(token: str):
                         ig_user = page.get("name", "Instagram User")
                         return fb_name, ig_id, ig_user
             
-            # 3. Direct IG Account Check
             r_ig = client.get(f"https://graph.facebook.com/v21.0/{ig_id}?fields=id,username&access_token={token}")
             if r_ig.status_code == 200:
                 d = r_ig.json()
@@ -199,8 +196,8 @@ with st.sidebar:
     lang = st.radio("🌐 Language / भाषा:", ["English", "हिन्दी (Hindi)"], horizontal=True)
     
     st.markdown("---")
-    st.markdown("### 👤 Active Profile / एक्टिव यूजर")
-    display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Not Set"
+    st.markdown("### 👤 Active User Profile / एक्टिव यूजर")
+    display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Public User"
     display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
     st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="glowing-badge">💬 WhatsApp: {display_phone}</div>', unsafe_allow_html=True)
@@ -212,25 +209,22 @@ with st.sidebar:
         st.markdown(f'<div class="glowing-badge">💼 LinkedIn: {st.session_state["li_name"]}</div>', unsafe_allow_html=True)
     
     st.markdown("---")
-    st.markdown("### 🤖 Connected 4 Platforms")
-    st.markdown("- 📸 **Instagram** (Stories & Feed Live)")
-    st.markdown("- 📘 **Facebook** (Timeline 1-Click)")
-    st.markdown("- 💼 **LinkedIn** (Official REST API)")
-    st.markdown("- 💬 **WhatsApp** (Direct Delivery)")
+    st.markdown("### ⚡ Zero-Friction Multi-Share")
+    st.caption("Post instantly via 1-Click Sharers OR Autonomous API background dispatch.")
 
 # Main Header
 if lang == "English":
     st.markdown('<div class="fantasy-title">🌌 Agentic AI Omni-Studio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">Broadcast to Instagram, Facebook, LinkedIn & WhatsApp in 1-Click</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">Create 4K Visual Content & Broadcast Across Social Channels in 1-Click</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="fantasy-title">🌌 एजेंटिक AI ऑम्नी-स्टूडियो</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">इंस्टाग्राम, फेसबुक, लिंक्डइन और व्हाट्सएप पर 1-क्लिक में पोस्ट करें</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">4K विजुअल कंटेंट बनाएं और सोशल मीडिया पर 1-क्लिक में पोस्ट करें</div>', unsafe_allow_html=True)
 
 # Tabs
 tab_studio, tab_accounts, tab_guide = st.tabs([
     "🔮 Studio / पोस्ट स्टूडियो", 
-    "⚙️ Connect Accounts / अकाउंट्स जोड़ें", 
-    "📖 Easy Guide / सरल मदद"
+    "⚙️ Pro API Connect / ऑटोमेशन जोड़ें", 
+    "📖 Easy Guide / सरल गाइड"
 ])
 
 # ==========================================
@@ -241,16 +235,23 @@ with tab_studio:
 
     with col_left:
         with st.container(border=True):
-            st.markdown("### 🎨 1. Media Source / कंटेंट चुनें")
+            st.markdown("### 🎨 1. Content & Watermark / कंटेंट और नाम")
 
-            source_label = "Select Content Type:" if lang == "English" else "कंटेंट का प्रकार चुनें:"
+            input_watermark = st.text_input(
+                "🏷️ Your Signature Name / आपका नाम (Watermark):",
+                value=st.session_state["watermark"],
+                placeholder="Enter your name / अपना नाम लिखें (e.g. Dileep Yadav)"
+            )
+            st.session_state["watermark"] = input_watermark
+
+            source_label = "Select Content Source:" if lang == "English" else "कंटेंट का प्रकार चुनें:"
             opt1 = "✨ Generate 4K AI Nature Graphic" if lang == "English" else "✨ 4K AI नेचर ग्राफिक बनाएं"
             opt2 = "📂 Upload Photo/Video from PC" if lang == "English" else "📂 कम्प्यूटर से फोटो/वीडियो चुनें"
 
             media_source = st.radio(source_label, [opt1, opt2], horizontal=True)
 
             if media_source == opt2:
-                up_label = "Choose an image (.jpg, .png) or video (.mp4) from your local folder:" if lang == "English" else "अपने कम्प्यूटर के किसी भी फोल्डर से फोटो या वीडियो चुनें:"
+                up_label = "Choose an image (.jpg, .png) or video (.mp4) from your local folder:" if lang == "English" else "अपने कम्प्यूटर से फोटो या वीडियो चुनें:"
                 uploaded_file = st.file_uploader(up_label, type=["jpg", "jpeg", "png", "mp4"])
                 if uploaded_file is not None:
                     suffix = Path(uploaded_file.name).suffix
@@ -259,7 +260,6 @@ with tab_studio:
                     st.session_state["custom_media_path"] = tfile.name
                     st.success(f"📂 Loaded: {uploaded_file.name}")
             else:
-                # 100% Zero-Fail AI Quote Generator
                 btn_txt = "✨ Auto-Generate Inspiring Quote" if lang == "English" else "✨ नया विचार (Quote) जनरेट करें"
                 if st.button(btn_txt, use_container_width=True):
                     with st.spinner("🧠 AI is crafting an inspiring quote..."):
@@ -288,21 +288,20 @@ with tab_studio:
             )
 
         with st.container(border=True):
-            st.markdown("### 🎯 2. Social Destinations (All 4 Networks) / सोशल मीडिया")
+            st.markdown("### 🎯 2. Social Destinations / सोशल मीडिया")
             
-            # Connection Status Hints
-            ig_status_icon = f"🟢 ({st.session_state['ig_user']})" if st.session_state["ig_token"] else "⚪ (Token required in Tab 2)"
-            fb_status_icon = f"🟢 ({st.session_state['fb_name']})" if st.session_state["fb_name"] else "🟢 Ready"
-            li_status_icon = f"🟢 ({st.session_state['li_name']})" if st.session_state["li_token"] else "⚪ (Token required in Tab 2)"
-            wa_status_icon = f"🟢 ({st.session_state['phone']})" if st.session_state["phone"] else "⚪ (Phone required in Tab 2)"
+            ig_status_icon = f"🟢 ({st.session_state['ig_user']})" if st.session_state["ig_token"] else "⚪ (1-Click Mode)"
+            fb_status_icon = f"🟢 ({st.session_state['fb_name']})" if st.session_state["fb_name"] else "🟢 (1-Click Mode)"
+            li_status_icon = f"🟢 ({st.session_state['li_name']})" if st.session_state["li_token"] else "⚪ (1-Click Mode)"
+            wa_status_icon = "🟢 (1-Click Mode)"
             
             c1, c2 = st.columns(2)
             with c1:
                 target_insta_story = st.checkbox(f"📸 Instagram Story (24h) {ig_status_icon}", value=True)
                 target_insta_feed = st.checkbox(f"🖼️ Instagram Feed Post {ig_status_icon}", value=True)
             with c2:
-                target_fb = st.checkbox(f"📘 Facebook Web Dispatch {fb_status_icon}", value=True)
-                target_li = st.checkbox(f"💼 LinkedIn Professional Feed {li_status_icon}", value=True)
+                target_fb = st.checkbox(f"📘 Facebook Timeline {fb_status_icon}", value=True)
+                target_li = st.checkbox(f"💼 LinkedIn Post {li_status_icon}", value=True)
                 target_wa = st.checkbox(f"💬 WhatsApp Delivery {wa_status_icon}", value=True)
 
         # Action Buttons
@@ -332,7 +331,17 @@ with tab_studio:
             if preview_file and os.path.exists(preview_file):
                 if preview_file.lower().endswith((".png", ".jpg", ".jpeg")):
                     img = Image.open(preview_file)
-                    st.image(img, caption=f"✨ Signature Watermark: -- {active_author}", use_container_width=True)
+                    st.image(img, caption=f"✨ Watermark: -- {active_author}", use_container_width=True)
+                    
+                    # Direct 1-Click Download Button for ANY User!
+                    with open(preview_file, "rb") as file_bytes:
+                        st.download_button(
+                            label="💾 Download 4K Graphic / फोटो डाउनलोड करें",
+                            data=file_bytes,
+                            file_name="Agentic_AI_Graphic.png",
+                            mime="image/png",
+                            use_container_width=True
+                        )
                 elif preview_file.lower().endswith(".mp4"):
                     st.video(preview_file)
             else:
@@ -357,10 +366,7 @@ with tab_studio:
 
         # 1. Instagram Story
         if target_insta_story:
-            if not st.session_state["ig_token"]:
-                with res_col1:
-                    st.warning("⚠️ **Instagram Story:** Meta Token missing. Please paste token in Tab 2 ('Connect Accounts')!")
-            else:
+            if st.session_state["ig_token"]:
                 with st.spinner("📸 Broadcasting to Instagram Story (24h)..."):
                     res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                     with res_col1:
@@ -368,13 +374,13 @@ with tab_studio:
                             st.success("✅ **Instagram Story (24h):** Published Live!")
                         else:
                             st.error(f"❌ **Instagram Story Notice:** {res}")
+            else:
+                with res_col1:
+                    st.info("📸 **Instagram Story:** Ready! (Connect Meta Token in Tab 2 for 100% autonomous background auto-posting).")
 
         # 2. Instagram Feed
         if target_insta_feed:
-            if not st.session_state["ig_token"]:
-                with res_col1:
-                    st.warning("⚠️ **Instagram Feed:** Meta Token missing. Please paste token in Tab 2 ('Connect Accounts')!")
-            else:
+            if st.session_state["ig_token"]:
                 with st.spinner("🖼️ Broadcasting to Instagram Feed..."):
                     res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                     with res_col1:
@@ -382,13 +388,13 @@ with tab_studio:
                             st.success("✅ **Instagram Feed:** Published Live!")
                         else:
                             st.error(f"❌ **Instagram Feed Notice:** {res}")
-
-        # 3. LinkedIn
-        if target_li:
-            if not st.session_state["li_token"]:
-                with res_col2:
-                    st.warning("⚠️ **LinkedIn:** Token missing. Please paste LinkedIn token in Tab 2!")
             else:
+                with res_col1:
+                    st.info("🖼️ **Instagram Feed:** Ready! (Connect Meta Token in Tab 2 for 100% autonomous background auto-posting).")
+
+        # 3. LinkedIn (Hybrid: API if token, or Instant 1-Click Web Share)
+        if target_li:
+            if st.session_state["li_token"]:
                 with st.spinner("💼 Broadcasting to LinkedIn..."):
                     res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"], author=active_author)
                     with res_col2:
@@ -396,14 +402,18 @@ with tab_studio:
                             st.success("✅ **LinkedIn Feed:** Published Live!")
                         else:
                             st.error(f"❌ **LinkedIn Notice:** {res}")
+            else:
+                with res_col2:
+                    li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
+                    st.link_button("💼 1-Click Share to LinkedIn", li_share_url, use_container_width=True)
 
-        # 4. Facebook
+        # 4. Facebook (Universal 1-Click Share)
         if target_fb:
             with res_col2:
                 fb_share_url = f"https://www.facebook.com/sharer/sharer.php?u={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}&quote={urllib.parse.quote(caption_text)}"
                 st.link_button("📘 1-Click Share to Facebook Timeline", fb_share_url, use_container_width=True)
 
-        # 5. WhatsApp
+        # 5. WhatsApp (Universal 1-Click Delivery)
         if target_wa:
             with res_col2:
                 wa_phone = st.session_state["phone"].replace("+", "").strip() if st.session_state["phone"] else ""
@@ -415,36 +425,33 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: CONNECT ACCOUNTS (DIRECT ZERO-LOOP LINKS)
+# TAB 2: PRO API CONNECT (OPTIONAL ADVANCED AUTO-POSTING)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
-        st.markdown("### 🌟 Auto-Connect All 4 Platforms / चारों अकाउंट्स जोड़ें")
-        st.markdown("Apna profile aur token save karein, **Active Status turant Green 🟢 ho jayega:**")
+        st.markdown("### 🌟 Pro Automation Hub (Optional) / ऑटोमेशन जोड़ें")
+        st.markdown("Agar aap chahte hain ki **Instagram aur LinkedIn par 100% Background Robot** se auto-post ho bina kisi click ke, toh apna token yahan save karein:")
 
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
 
     with col_left_form:
         # Profile Section
         with st.container(border=True):
-            st.markdown("#### 👤 1. User Profile & WhatsApp")
-            input_name = st.text_input("🏷️ Signature Name / आपका नाम (Watermark)", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
+            st.markdown("#### 👤 1. WhatsApp Contact (Optional)")
             input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with country code)", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
 
         # Meta & LinkedIn Direct Token Tools
         with st.container(border=True):
             st.markdown("#### 📸 2. Instagram & Facebook (Meta)")
-            st.link_button("🔗 Direct Meta Token Generator", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
+            st.link_button("🔗 Open Meta Token Tool", "https://developers.facebook.com/tools/explorer/", use_container_width=True)
             input_ig_token = st.text_input("Paste Meta Token Here:", value=st.session_state["ig_token"], type="password", placeholder="EAAW...")
 
         with st.container(border=True):
             st.markdown("#### 💼 3. LinkedIn")
-            # Clean direct OAuth Token Generator link without loop parameters
-            st.link_button("🔗 Direct LinkedIn Token Generator", "https://www.linkedin.com/developers/tools/oauth/token-generator", use_container_width=True)
+            st.link_button("🔗 Open LinkedIn Token Tool", "https://www.linkedin.com/developers/tools/oauth/token-generator", use_container_width=True)
             input_li_token = st.text_input("Paste LinkedIn Token Here:", value=st.session_state["li_token"], type="password", placeholder="AQUg...")
 
-        if st.button("✨ Save & Connect All Accounts / सभी अकाउंट्स कनेक्ट करें", type="primary", use_container_width=True):
-            st.session_state["watermark"] = input_name
+        if st.button("✨ Save & Connect Pro Accounts", type="primary", use_container_width=True):
             st.session_state["phone"] = input_phone
             st.session_state["ig_token"] = input_ig_token
             st.session_state["li_token"] = input_li_token
@@ -477,48 +484,47 @@ with tab_accounts:
             # Instagram Status
             if st.session_state["ig_token"]:
                 ig_info = st.session_state["ig_user"] if st.session_state["ig_user"] else "Ready"
-                st.markdown(f"📸 **Instagram:** 🟢 `Connected ({ig_info})`")
+                st.markdown(f"📸 **Instagram:** 🟢 `Autonomous API ({ig_info})`")
             else:
-                st.markdown("📸 **Instagram:** ⚪ `Paste Meta Token on Left`")
+                st.markdown("📸 **Instagram:** ⚪ `1-Click Universal Mode`")
 
             # Facebook Status
             if st.session_state["fb_name"]:
                 st.markdown(f"📘 **Facebook:** 🟢 `Connected ({st.session_state['fb_name']})`")
-            elif st.session_state["ig_token"]:
-                st.markdown("📘 **Facebook:** 🟢 `Timeline Ready`")
             else:
-                st.markdown("📘 **Facebook:** ⚪ `Paste Meta Token on Left`")
+                st.markdown("📘 **Facebook:** 🟢 `1-Click Timeline Share Ready`")
 
             # LinkedIn Status
             if st.session_state["li_token"]:
                 li_user = st.session_state["li_name"] if st.session_state["li_name"] else "Connected"
-                st.markdown(f"💼 **LinkedIn:** 🟢 `Connected ({li_user})`")
+                st.markdown(f"💼 **LinkedIn:** 🟢 `Autonomous API ({li_user})`")
             else:
-                st.markdown("💼 **LinkedIn:** ⚪ `Paste LinkedIn Token on Left`")
+                st.markdown("💼 **LinkedIn:** 🟢 `1-Click Share Ready`")
 
             # WhatsApp Status
             if st.session_state["phone"]:
                 st.markdown(f"💬 **WhatsApp:** 🟢 `Ready ({st.session_state['phone']})`")
             else:
-                st.markdown("💬 **WhatsApp:** ⚪ `Enter Number on Left`")
-
-        if st.session_state["watermark"]:
-            st.success(f"🏷️ Active Signature: **-- {st.session_state['watermark']}**")
+                st.markdown("💬 **WhatsApp:** 🟢 `1-Click Share Ready`")
 
 # ==========================================
 # TAB 3: EASY GUIDE & HELP
 # ==========================================
 with tab_guide:
     with st.container(border=True):
-        st.markdown("### 📖 How to Use This Studio (Simple 3-Step Guide)")
+        st.markdown("### 📖 How Any User Can Use This Studio (Zero Friction!)")
         st.markdown("""
-        1. **Choose Your Content / कंटेंट चुनें:**
-           - Select **"Upload Photo/Video from PC"** to pick any photo or video from your computer.
-           - OR click **"Auto-Generate Quote"** to let AI craft a 4K nature graphic automatically!
-        2. **Select Target Platforms (All 4 Networks) / सोशल मीडिया चुनें:**
-           - Tick the checkboxes for where you want to post: **Instagram, Facebook, LinkedIn, or WhatsApp**.
-        3. **Click Launch / पोस्ट करें:**
-           - Hit **"🚀 Launch Multi-Platform Post"** and watch your content publish across all channels simultaneously!
+        ### 🌟 Mode 1: Instant Universal Mode (No Setup Required!)
+        1. **Write Your Quote / विचार लिखें:**
+           - Type any quote or click **"Auto-Generate Inspiring Quote"**!
+        2. **Enter Your Name (Watermark):**
+           - Put your name so it appears elegantly on the 4K graphic!
+        3. **1-Click Share Everywhere:**
+           - Hit **"🚀 Launch Multi-Platform Post"** and instantly share to **WhatsApp, Facebook, LinkedIn** or click **"💾 Download 4K Graphic"** to save to your phone/PC!
+
+        ---
+
+        ### 🤖 Mode 2: Pro Autonomous Background Posting (Optional for Creators)
+        - If you want the robot to post directly to your Instagram Stories & LinkedIn in the background without any dialogs:
+        - Go to **Tab 2 (Pro API Connect)**, paste your Meta/LinkedIn access tokens once, and click **Save**!
         """)
-        st.markdown("---")
-        st.markdown("💡 **Tip:** To launch the studio anytime without opening VS Code, simply double-click the **`Launch_AI_Studio.bat`** file on your computer!")
