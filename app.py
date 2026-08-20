@@ -7,6 +7,14 @@ import httpx
 from pathlib import Path
 from PIL import Image
 
+# Import database module
+from database import (
+    save_user_profile,
+    get_user_profile,
+    save_post_to_history,
+    get_recent_posts
+)
+
 # Import our unified social engine tools
 from social_tools import (
     create_nature_quote_image,
@@ -25,6 +33,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Load profile from SQLite database
+saved_name, saved_phone = get_user_profile()
 
 # Curated High-Impact Neural Quotes
 INSPIRING_QUOTES = [
@@ -120,11 +131,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Session State
+# Initialize Session State with Persistent SQLite Data
 if "watermark" not in st.session_state:
-    st.session_state["watermark"] = ""
+    st.session_state["watermark"] = saved_name
 if "phone" not in st.session_state:
-    st.session_state["phone"] = ""
+    st.session_state["phone"] = saved_phone
 if "ig_id" not in st.session_state:
     st.session_state["ig_id"] = "17841448994358440"
 if "ig_token" not in st.session_state:
@@ -152,6 +163,7 @@ with st.sidebar:
     display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
     st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="glowing-badge">💬 WhatsApp: {display_phone}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="glowing-badge">🗄️ Database: SQLite Active</div>', unsafe_allow_html=True)
     
     st.markdown("---")
     st.markdown("### ⚡ 1-Click Multi-Platform")
@@ -169,9 +181,10 @@ else:
     st.markdown('<div class="fantasy-subtitle">4K विजुअल कंटेंट बनाएं और सोशल मीडिया पर 1-क्लिक में पोस्ट करें</div>', unsafe_allow_html=True)
 
 # Tabs
-tab_studio, tab_profile, tab_guide = st.tabs([
+tab_studio, tab_profile, tab_history, tab_guide = st.tabs([
     "🔮 Studio / पोस्ट स्टूडियो", 
     "👤 My Profile / प्रोफाइल सेटिंग्स", 
+    "📜 History / पिछला इतिहास",
     "📖 Easy Guide / सरल मदद"
 ])
 
@@ -294,8 +307,10 @@ with tab_studio:
             final_media = create_nature_quote_image(caption_text, author=active_author, is_story=True)
             st.session_state["latest_preview"] = final_media
 
-        with st.spinner("⚡ Uploading asset to high-speed CDN..."):
+        with st.spinner("⚡ Uploading asset to high-speed CDN & Database..."):
             img_url = upload_local_file(final_media)
+            # Save permanently to SQLite Database
+            save_post_to_history(caption_text, active_author, img_url or "Local Asset")
 
         # Autonomous API Dispatch if developer tokens are connected
         if st.session_state.get("ig_token"):
@@ -331,29 +346,30 @@ with tab_studio:
                 st.link_button("📸 Open Instagram Web / App", "https://www.instagram.com/", use_container_width=True)
 
         st.balloons()
-        st.toast("🎉 Grand Omni-Channel Broadcast Ready!")
+        st.toast("🎉 Grand Omni-Channel Broadcast Saved to Database & Ready!")
 
 # ==========================================
-# TAB 2: PROFILE & SETTINGS (CLEAN & ZERO-FRICTION)
+# TAB 2: PROFILE & SETTINGS (PERSISTENT SQLITE)
 # ==========================================
 with tab_profile:
     with st.container(border=True):
         st.markdown("### 👤 User Profile Settings / प्रोफाइल सेटिंग्स")
-        st.markdown("Apna naam aur WhatsApp number yahan likhein taaki **har photo par aapka signature watermark lag sake:**")
+        st.markdown("Apna naam aur WhatsApp number yahan likhein — **SQLite Database mein permanently save ho jayega:**")
 
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
 
     with col_left_form:
-        # Profile Section
         with st.container(border=True):
             st.markdown("#### 🏷️ 1. Your Details")
             input_name = st.text_input("Signature Name / आपका नाम (Watermark):", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें (e.g. Dileep Yadav)")
             input_phone = st.text_input("WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
 
-        if st.button("✨ Save Profile / प्रोफाइल सेव करें", type="primary", use_container_width=True):
+        if st.button("✨ Save Profile to Database / प्रोफाइल सेव करें", type="primary", use_container_width=True):
             st.session_state["watermark"] = input_name
             st.session_state["phone"] = input_phone
-            st.toast("🎉 Profile Saved Successfully!")
+            # Save into SQLite Database
+            save_user_profile(input_name, input_phone)
+            st.toast("🎉 Profile Saved to SQLite Database Successfully!")
             st.rerun()
 
         # Advanced Developer Automation (Collapsed)
@@ -374,6 +390,7 @@ with tab_profile:
             
             st.markdown(f"🏷️ **Active Watermark:** 🟢 `{user_lbl}`")
             st.markdown(f"💬 **WhatsApp Target:** 🟢 `{phone_lbl}`")
+            st.markdown("🗄️ **Database Storage:** 🟢 `SQLite Connected`")
             st.markdown("📸 **Instagram:** 🟢 `1-Click Direct Share Ready`")
             st.markdown("📘 **Facebook:** 🟢 `1-Click Timeline Share Ready`")
             st.markdown("💼 **LinkedIn:** 🟢 `1-Click Post Ready`")
@@ -382,17 +399,39 @@ with tab_profile:
             st.success(f"✨ Signature Watermark: **-- {st.session_state['watermark']}**")
 
 # ==========================================
-# TAB 3: EASY GUIDE & HELP
+# TAB 3: POST HISTORY (PERSISTENT DATABASE AUDIT)
+# ==========================================
+with tab_history:
+    with st.container(border=True):
+        st.markdown("### 📜 SQLite Post History / पिछला इतिहास")
+        st.markdown("Aapke dwara generate kiye gaye sabhi quotes aur graphics ka **Permanent Record:**")
+        
+        posts = get_recent_posts(limit=10)
+        if posts:
+            for p_quote, p_author, p_img, p_time in posts:
+                with st.expander(f"✨ \"{p_quote[:45]}...\" -- {p_author} ({p_time})"):
+                    st.write(f"**Full Quote:** {p_quote}")
+                    st.write(f"**Signature:** -- {p_author}")
+                    st.write(f"**Created At:** {p_time}")
+                    if p_img and p_img.startswith("http"):
+                        st.markdown(f"📸 **Graphic Link:** [View 4K Image]({p_img})")
+        else:
+            st.info("👈 Abhi tak koi post create nahi hua hai. Tab 1 mein jakar naya post create karein!")
+
+# ==========================================
+# TAB 4: EASY GUIDE & HELP
 # ==========================================
 with tab_guide:
     with st.container(border=True):
         st.markdown("### 📖 How Any User Can Use This Studio (Simple & 100% Free!)")
         st.markdown("""
         1. **Set Your Name / अपना नाम लिखें:**
-           - Go to **Tab 2 (My Profile)** and enter your name (e.g. *Dileep Yadav*).
+           - Go to **Tab 2 (My Profile)** and enter your name (e.g. *Dileep Yadav*). It is saved permanently to the database.
         2. **Create 4K Graphic / ग्राफिक बनाएं:**
            - Go to **Tab 1 (Studio)**, type your quote or click **"Auto-Generate Inspiring Quote"**!
         3. **1-Click Share & Download / पोस्ट करें:**
            - Click **"💾 Download 4K Graphic"** to save it to your phone or computer.
            - Click **"🚀 Launch Multi-Platform Post"** to instantly share to **LinkedIn, Facebook, and WhatsApp** in 1 second!
+        4. **Check History / पिछला रिकॉर्ड देखें:**
+           - Go to **Tab 3 (History)** to view and re-download all past generated graphics anytime!
         """)
