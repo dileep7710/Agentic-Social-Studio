@@ -196,8 +196,8 @@ with st.sidebar:
     lang = st.radio("🌐 Language / भाषा:", ["English", "हिन्दी (Hindi)"], horizontal=True)
     
     st.markdown("---")
-    st.markdown("### 👤 Active User Profile / एक्टिव यूजर")
-    display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Public User"
+    st.markdown("### 👤 Active Profile / एक्टिव यूजर")
+    display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Not Set"
     display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
     st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="glowing-badge">💬 WhatsApp: {display_phone}</div>', unsafe_allow_html=True)
@@ -223,8 +223,8 @@ else:
 # Tabs
 tab_studio, tab_accounts, tab_guide = st.tabs([
     "🔮 Studio / पोस्ट स्टूडियो", 
-    "⚙️ Pro API Connect / ऑटोमेशन जोड़ें", 
-    "📖 Easy Guide / सरल गाइड"
+    "⚙️ Connect Accounts / अकाउंट्स जोड़ें", 
+    "📖 Easy Guide / सरल मदद"
 ])
 
 # ==========================================
@@ -331,7 +331,7 @@ with tab_studio:
             if preview_file and os.path.exists(preview_file):
                 if preview_file.lower().endswith((".png", ".jpg", ".jpeg")):
                     img = Image.open(preview_file)
-                    st.image(img, caption=f"✨ Watermark: -- {active_author}", use_container_width=True)
+                    st.image(img, caption=f"✨ Signature Watermark: -- {active_author}", use_container_width=True)
                     
                     # Direct 1-Click Download Button for ANY User!
                     with open(preview_file, "rb") as file_bytes:
@@ -425,19 +425,20 @@ with tab_studio:
         st.toast("🎉 Grand Omni-Channel Broadcast Completed Successfully!")
 
 # ==========================================
-# TAB 2: PRO API CONNECT (OPTIONAL ADVANCED AUTO-POSTING)
+# TAB 2: CONNECT ACCOUNTS (USER PROFILE & TOKENS)
 # ==========================================
 with tab_accounts:
     with st.container(border=True):
-        st.markdown("### 🌟 Pro Automation Hub (Optional) / ऑटोमेशन जोड़ें")
-        st.markdown("Agar aap chahte hain ki **Instagram aur LinkedIn par 100% Background Robot** se auto-post ho bina kisi click ke, toh apna token yahan save karein:")
+        st.markdown("### 🌟 User Profile & Pro API Connect / अकाउंट्स जोड़ें")
+        st.markdown("Apna naam aur tokens yahan save karein — **Sidebar aur Status turant Green 🟢 ho jayenge:**")
 
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
 
     with col_left_form:
         # Profile Section
         with st.container(border=True):
-            st.markdown("#### 👤 1. WhatsApp Contact (Optional)")
+            st.markdown("#### 👤 1. User Profile & WhatsApp")
+            input_name_tab2 = st.text_input("🏷️ Signature Name / आपका नाम (Watermark)", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें (e.g. Dileep Yadav)")
             input_phone = st.text_input("💬 WhatsApp Number / व्हाट्सएप नंबर (with country code)", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
 
         # Meta & LinkedIn Direct Token Tools
@@ -451,7 +452,8 @@ with tab_accounts:
             st.link_button("🔗 Open LinkedIn Token Tool", "https://www.linkedin.com/developers/tools/oauth/token-generator", use_container_width=True)
             input_li_token = st.text_input("Paste LinkedIn Token Here:", value=st.session_state["li_token"], type="password", placeholder="AQUg...")
 
-        if st.button("✨ Save & Connect Pro Accounts", type="primary", use_container_width=True):
+        if st.button("✨ Save & Connect All Accounts / सभी अकाउंट्स सेव करें", type="primary", use_container_width=True):
+            st.session_state["watermark"] = input_name_tab2
             st.session_state["phone"] = input_phone
             st.session_state["ig_token"] = input_ig_token
             st.session_state["li_token"] = input_li_token
@@ -474,7 +476,7 @@ with tab_accounts:
                         st.session_state["ig_id"] = detected_ig_id
                         st.session_state["ig_user"] = detected_ig_user
 
-            st.toast("🎉 Accounts Connected & Saved Successfully!")
+            st.toast("🎉 Profile & Accounts Saved Successfully!")
             st.rerun()
 
     with col_right_status:
@@ -507,6 +509,9 @@ with tab_accounts:
             else:
                 st.markdown("💬 **WhatsApp:** 🟢 `1-Click Share Ready`")
 
+        if st.session_state["watermark"]:
+            st.success(f"🏷️ Active Signature: **-- {st.session_state['watermark']}**")
+
 # ==========================================
 # TAB 3: EASY GUIDE & HELP
 # ==========================================
@@ -526,5 +531,5 @@ with tab_guide:
 
         ### 🤖 Mode 2: Pro Autonomous Background Posting (Optional for Creators)
         - If you want the robot to post directly to your Instagram Stories & LinkedIn in the background without any dialogs:
-        - Go to **Tab 2 (Pro API Connect)**, paste your Meta/LinkedIn access tokens once, and click **Save**!
+        - Go to **Tab 2 (Connect Accounts)**, paste your Meta/LinkedIn access tokens once, and click **Save**!
         """)
