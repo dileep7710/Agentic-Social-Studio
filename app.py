@@ -6,6 +6,19 @@ import tempfile
 import urllib.parse
 from pathlib import Path
 from PIL import Image
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import database persistence
+from database import (
+    get_user_profile,
+    save_user_profile,
+    clear_user_profile,
+    save_post_to_history,
+    get_recent_posts
+)
 
 # Import our unified social engine tools & autonomous agent
 from ai_agent import agent
@@ -105,28 +118,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-from dotenv import load_dotenv
-load_dotenv()
+# Fetch Persistent User Profile from SQLite Database
+db_profile = get_user_profile()
 
-# Initialize Isolated Per-User Session State with environment defaults
+# Initialize Persistent Session State
 if "watermark" not in st.session_state:
-    st.session_state["watermark"] = os.getenv("WATERMARK_NAME", "Dileep Yadav")
+    st.session_state["watermark"] = db_profile.get("name") or os.getenv("WATERMARK_NAME", "Dileep Yadav")
 if "phone" not in st.session_state:
-    st.session_state["phone"] = os.getenv("WHATSAPP_DEFAULT_PHONE", "+917710278967")
+    st.session_state["phone"] = db_profile.get("phone") or os.getenv("WHATSAPP_DEFAULT_PHONE", "+917710278967")
 if "ig_id" not in st.session_state:
-    st.session_state["ig_id"] = os.getenv("INSTAGRAM_ACCOUNT_ID", "17841448994358440")
+    st.session_state["ig_id"] = db_profile.get("ig_id") or os.getenv("INSTAGRAM_ACCOUNT_ID", "17841448994358440")
 if "ig_token" not in st.session_state:
-    st.session_state["ig_token"] = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+    st.session_state["ig_token"] = db_profile.get("ig_token") or os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 if "fb_page_id" not in st.session_state:
-    st.session_state["fb_page_id"] = os.getenv("FACEBOOK_PAGE_ID", "61583785015768")
+    st.session_state["fb_page_id"] = db_profile.get("fb_page_id") or os.getenv("FACEBOOK_PAGE_ID", "61583785015768")
 if "fb_page_token" not in st.session_state:
-    st.session_state["fb_page_token"] = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
+    st.session_state["fb_page_token"] = db_profile.get("fb_page_token") or os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 if "li_token" not in st.session_state:
-    st.session_state["li_token"] = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
+    st.session_state["li_token"] = db_profile.get("li_token") or os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 if "li_urn" not in st.session_state:
-    st.session_state["li_urn"] = os.getenv("LINKEDIN_AUTHOR_URN", "urn:li:person:neomMhUioZ")
-if "history" not in st.session_state:
-    st.session_state["history"] = []
+    st.session_state["li_urn"] = db_profile.get("li_urn") or os.getenv("LINKEDIN_AUTHOR_URN", "urn:li:person:neomMhUioZ")
 
 # Sidebar Profile Status
 with st.sidebar:
@@ -289,13 +300,8 @@ with tab_studio:
 
         with st.spinner("⚡ Uploading asset to high-speed CDN..."):
             img_url = upload_local_file(final_media)
-            # Record in session history
-            st.session_state["history"].append({
-                "quote": caption_text,
-                "author": active_author,
-                "img": img_url or "Local Media",
-                "time": "Just now"
-            })
+            # Record in SQLite Persistent Database
+            save_post_to_history(caption_text, active_author, img_url or "Local Media")
 
         # Action Card Container
         with st.container(border=True):
@@ -436,7 +442,7 @@ with tab_studio:
 with tab_profile:
     with st.container(border=True):
         st.markdown("### 👤 User Profile & Signature / प्रोफाइल सेटिंग्स")
-        st.markdown("Apna naam aur WhatsApp number yahan likhein — **har photo par aapka signature watermark lagega:**")
+        st.markdown("Apna naam aur WhatsApp number yahan likhein — **yeh SQLite Database mein hamesha ke liye save rahega (Refresh karne par bhi reset nahi hoga):**")
 
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
 
@@ -448,14 +454,26 @@ with tab_profile:
 
         b_save, b_reset = st.columns([1.5, 1])
         with b_save:
-            if st.button("✨ Save Profile / प्रोफाइल सेव करें", type="primary", use_container_width=True):
+            if st.button("✨ Save Profile (Permanent) / प्रोफाइल सेव करें", type="primary", use_container_width=True):
                 st.session_state["watermark"] = input_name
                 st.session_state["phone"] = input_phone
-                st.toast("🎉 Profile Saved Successfully!")
+                # Save Permanently to SQLite Database
+                save_user_profile(
+                    name=input_name,
+                    phone=input_phone,
+                    ig_id=st.session_state.get("ig_id", ""),
+                    ig_token=st.session_state.get("ig_token", ""),
+                    fb_page_id=st.session_state.get("fb_page_id", ""),
+                    fb_page_token=st.session_state.get("fb_page_token", ""),
+                    li_token=st.session_state.get("li_token", ""),
+                    li_urn=st.session_state.get("li_urn", "")
+                )
+                st.toast("🎉 Profile Permanently Saved in SQLite Database!")
                 st.rerun()
 
         with b_reset:
-            if st.button("🔄 Reset / रीसेट करें", use_container_width=True):
+            if st.button("🔄 Reset Profile / रीसेट करें", use_container_width=True):
+                clear_user_profile()
                 st.session_state["watermark"] = ""
                 st.session_state["phone"] = ""
                 st.session_state["ig_token"] = ""
@@ -464,19 +482,29 @@ with tab_profile:
 
         # Pro Developer API Settings (Optional)
         with st.expander("🛠️ Pro Developer API Settings (Optional)"):
-            st.caption("Only for developers who want automated background Graph API posting.")
+            st.caption("Saved permanently to SQLite database.")
             input_ig_id = st.text_input("Instagram Business Account ID:", value=st.session_state["ig_id"])
             input_ig_token = st.text_input("Meta / Instagram Access Token:", value=st.session_state["ig_token"], type="password")
             input_fb_page_id = st.text_input("Facebook Page ID:", value=st.session_state["fb_page_id"])
             input_fb_page_token = st.text_input("Facebook Page Access Token:", value=st.session_state["fb_page_token"], type="password")
             input_li_token = st.text_input("LinkedIn Access Token:", value=st.session_state["li_token"], type="password")
-            if st.button("Save API Tokens"):
+            if st.button("Save API Tokens (Permanent)"):
                 st.session_state["ig_id"] = input_ig_id
                 st.session_state["ig_token"] = input_ig_token
                 st.session_state["fb_page_id"] = input_fb_page_id
                 st.session_state["fb_page_token"] = input_fb_page_token
                 st.session_state["li_token"] = input_li_token
-                st.success("API Tokens Saved!")
+                save_user_profile(
+                    name=st.session_state["watermark"],
+                    phone=st.session_state["phone"],
+                    ig_id=input_ig_id,
+                    ig_token=input_ig_token,
+                    fb_page_id=input_fb_page_id,
+                    fb_page_token=input_fb_page_token,
+                    li_token=input_li_token,
+                    li_urn=st.session_state["li_urn"]
+                )
+                st.success("API Tokens Saved Permanently to Database!")
 
     with col_right_status:
         with st.container(border=True):
@@ -495,20 +523,23 @@ with tab_profile:
             st.success(f"✨ Signature Watermark: **-- {st.session_state['watermark']}**")
 
 # ==========================================
-# TAB 3: POST HISTORY
+# TAB 3: POST HISTORY (PERSISTENT SQLITE)
 # ==========================================
 with tab_history:
     with st.container(border=True):
         st.markdown("### 📜 Session Post History / पिछला इतिहास")
-        st.markdown("Aapke dwara generate kiye gaye sabhi quotes aur graphics ka **Record:**")
+        st.markdown("Aapke dwara generate kiye gaye sabhi quotes aur graphics ka **Permanent Database Record:**")
         
-        if st.session_state["history"]:
-            for item in reversed(st.session_state["history"]):
-                with st.expander(f"✨ \"{item['quote'][:45]}...\" -- {item['author']}"):
-                    st.write(f"**Full Quote:** {item['quote']}")
-                    st.write(f"**Signature:** -- {item['author']}")
-                    if item.get("img") and item["img"].startswith("http"):
-                        st.markdown(f"📸 **Media Link:** [View HD Image/Video]({item['img']})")
+        recent_posts = get_recent_posts(limit=25)
+        if recent_posts:
+            for item in recent_posts:
+                q_text, a_name, m_url, c_at = item
+                with st.expander(f"✨ \"{q_text[:45]}...\" -- {a_name} ({c_at})"):
+                    st.write(f"**Full Quote:** {q_text}")
+                    st.write(f"**Signature:** -- {a_name}")
+                    st.caption(f"🕒 Timestamp: {c_at}")
+                    if m_url and m_url.startswith("http"):
+                        st.markdown(f"📸 **Media Link:** [View HD Image/Video]({m_url})")
         else:
             st.info("👈 Abhi tak koi post create nahi hua hai. Tab 1 mein jakar naya post create karein!")
 
@@ -520,7 +551,7 @@ with tab_guide:
         st.markdown("### 📖 How Any User Can Use This Studio (100% Free & Zero Friction!)")
         st.markdown("""
         1. **Set Your Name / अपना नाम लिखें:**
-           - Go to **Tab 2 (Connect Accounts)** and enter your name (e.g. *Dileep Yadav*).
+           - Go to **Tab 2 (Connect Accounts)** and enter your name (e.g. *Dileep Yadav*). It is saved **permanently**!
         2. **Create or Upload Media / फोटो या वीडियो चुनें:**
            - Go to **Tab 1 (Studio)**, type your quote, click **"✨ Auto-Generate Inspiring Quote"** or upload any photo/video from your phone/PC!
         3. **1-Click Broadcast Everywhere / पोस्ट करें:**
