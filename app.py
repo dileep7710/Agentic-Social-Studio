@@ -375,13 +375,30 @@ with tab_studio:
                     if st.session_state["ig_token"] and st.session_state["ig_id"]:
                         res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                         if res.get("status") == "SUCCESS":
-                            st.success(f"✅ **Live Published to Instagram Story!** (ID: `{res.get('post_id')}`)")
+                            st.success(f"✅ **Live Published to Instagram Story via Meta API!** (ID: `{res.get('post_id')}`)")
                         else:
-                            st.info(f"📸 Meta Notice: {res.get('message', 'API direct post requires active business token.')}")
-                            st.link_button("📸 Open Instagram App/Web", "https://www.instagram.com/", use_container_width=True)
+                            st.warning(f"⚠️ Meta API Notice: {res.get('message', 'Direct API post requires active business token.')}")
+                            st.markdown("👇 **1-Tap Mobile Story Posting:**")
+                            st.download_button(
+                                label="💾 Step 1: Download 4K Story Graphic",
+                                data=raw_bytes,
+                                file_name=f"instagram_story_{int(time.time())}.png",
+                                mime="image/png",
+                                key="dl_ig_story",
+                                use_container_width=True
+                            )
+                            st.link_button("📸 Step 2: Open Instagram Story Camera", "https://www.instagram.com/create/story/", use_container_width=True)
                     else:
-                        st.info("📸 Ready for Story! Click below to open Instagram:")
-                        st.link_button("📸 Open Instagram App/Web", "https://www.instagram.com/", use_container_width=True)
+                        st.markdown("💡 **1-Tap Story Sharing:**")
+                        st.download_button(
+                            label="💾 Step 1: Download 4K Story Graphic",
+                            data=raw_bytes,
+                            file_name=f"instagram_story_{int(time.time())}.png",
+                            mime="image/png",
+                            key="dl_ig_story_guest",
+                            use_container_width=True
+                        )
+                        st.link_button("📸 Step 2: Open Instagram Story Camera", "https://www.instagram.com/create/story/", use_container_width=True)
 
         # 2. Instagram Feed
         if target_insta_feed:
@@ -391,12 +408,28 @@ with tab_studio:
                     if st.session_state["ig_token"] and st.session_state["ig_id"]:
                         res = post_instagram_feed(content=adapted_versions["instagram"], media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                         if res.get("status") == "SUCCESS":
-                            st.success(f"✅ **Live Published to Instagram Feed!** (ID: `{res.get('post_id')}`)")
+                            st.success(f"✅ **Live Published to Instagram Feed via Meta API!** (ID: `{res.get('post_id')}`)")
                         else:
-                            st.info(f"🖼️ Meta Notice: {res.get('message', 'API direct post requires active business token.')}")
-                            st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
+                            st.warning(f"⚠️ Meta API Notice: {res.get('message', 'Direct API post requires active business token.')}")
+                            st.download_button(
+                                label="💾 Step 1: Download 4K Feed Graphic",
+                                data=raw_bytes,
+                                file_name=f"instagram_feed_{int(time.time())}.png",
+                                mime="image/png",
+                                key="dl_ig_feed",
+                                use_container_width=True
+                            )
+                            st.link_button("🖼️ Step 2: Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
                     else:
-                        st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
+                        st.download_button(
+                            label="💾 Step 1: Download 4K Feed Graphic",
+                            data=raw_bytes,
+                            file_name=f"instagram_feed_{int(time.time())}.png",
+                            mime="image/png",
+                            key="dl_ig_feed_guest",
+                            use_container_width=True
+                        )
+                        st.link_button("🖼️ Step 2: Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
 
         # 3. LinkedIn
         if target_li:
