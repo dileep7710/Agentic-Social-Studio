@@ -2,22 +2,24 @@ import streamlit as st
 import streamlit.components.v1 as components
 import os
 import json
-import random
 import tempfile
 import urllib.parse
-import httpx
 from pathlib import Path
 from PIL import Image
 
-# Import our unified social engine tools
+# Import our unified social engine tools & autonomous agent
+from ai_agent import agent
 from social_tools import (
     create_nature_quote_image,
     upload_local_file,
     post_instagram_story,
     post_instagram_feed,
-    post_facebook,
+    post_facebook_page,
     post_linkedin,
-    post_whatsapp
+    post_whatsapp,
+    post_twitter_x,
+    get_facebook_share_url,
+    get_linkedin_share_url
 )
 
 # Page Configuration
@@ -27,25 +29,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Curated High-Impact Quotes
-INSPIRING_QUOTES = [
-    "The secret of getting ahead is getting started.",
-    "Do what you can, with what you have, where you are.",
-    "Small daily improvements over time lead to stunning results.",
-    "Discipline is the bridge between goals and accomplishment.",
-    "Your time is limited, don't waste it living someone else's life.",
-    "Action is the foundational key to all success.",
-    "Believe you can and you're halfway there.",
-    "Great things never come from comfort zones.",
-    "Success is the sum of small efforts, repeated day in and day out.",
-    "Turn your wounds into wisdom and your challenges into triumphs.",
-    "Opportunities don't happen. You create them.",
-    "The only limit to our realization of tomorrow will be our doubts of today.",
-    "Stay hungry, stay foolish, and always stay relentless in your pursuit.",
-    "Focus on being productive instead of busy.",
-    "Consistency is the true DNA of mastery."
-]
 
 # Premium Glassmorphism Styling
 st.markdown("""
@@ -122,70 +105,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Isolated Per-User Session State (No data bleed between visitors)
+# Initialize Isolated Per-User Session State
 if "watermark" not in st.session_state:
     st.session_state["watermark"] = ""
 if "phone" not in st.session_state:
     st.session_state["phone"] = ""
 if "ig_id" not in st.session_state:
-    st.session_state["ig_id"] = "17841448994358440"
+    st.session_state["ig_id"] = ""
 if "ig_token" not in st.session_state:
     st.session_state["ig_token"] = ""
-if "ig_user" not in st.session_state:
-    st.session_state["ig_user"] = ""
-if "fb_name" not in st.session_state:
-    st.session_state["fb_name"] = ""
+if "fb_page_id" not in st.session_state:
+    st.session_state["fb_page_id"] = ""
+if "fb_page_token" not in st.session_state:
+    st.session_state["fb_page_token"] = ""
 if "li_token" not in st.session_state:
     st.session_state["li_token"] = ""
 if "li_urn" not in st.session_state:
     st.session_state["li_urn"] = ""
-if "li_name" not in st.session_state:
-    st.session_state["li_name"] = ""
 if "history" not in st.session_state:
     st.session_state["history"] = []
-
-# Helper: Auto-Detect LinkedIn
-def auto_detect_linkedin(token: str):
-    if not token:
-        return None, None
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            r = client.get("https://api.linkedin.com/v2/userinfo", headers={"Authorization": f"Bearer {token}"})
-            if r.status_code == 200:
-                data = r.json()
-                sub = data.get("sub")
-                name = data.get("name", "Connected User")
-                if sub:
-                    return f"urn:li:person:{sub}", name
-    except Exception:
-        pass
-    return None, None
-
-# Helper: Auto-Detect Meta
-def auto_detect_meta(token: str):
-    if not token:
-        return None, None, None
-    fb_name = "Connected User"
-    ig_id = "17841448994358440"
-    ig_user = "@dileepy18"
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            r_me = client.get(f"https://graph.facebook.com/v21.0/me?fields=name,id&access_token={token}")
-            if r_me.status_code == 200:
-                fb_name = r_me.json().get("name", "Connected User")
-
-            r_acc = client.get(f"https://graph.facebook.com/v21.0/me/accounts?fields=instagram_business_account,name&access_token={token}")
-            if r_acc.status_code == 200:
-                data = r_acc.json().get("data", [])
-                for page in data:
-                    ig_acc = page.get("instagram_business_account", {})
-                    if "id" in ig_acc:
-                        ig_id = ig_acc["id"]
-                        ig_user = page.get("name", "Instagram User")
-                        return fb_name, ig_id, ig_user
-    except Exception:
-        pass
-    return fb_name, ig_id, ig_user
 
 # Sidebar Profile Status
 with st.sidebar:
@@ -202,20 +140,20 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### ⚡ 1-Click Multi-Platform Engine")
-    st.caption("Broadcast 4K images & videos across Instagram (Story/Feed), Facebook, LinkedIn & WhatsApp.")
+    st.caption("Broadcast 4K images & videos across Instagram (Story/Feed), Facebook, LinkedIn, WhatsApp & Twitter.")
 
 # Main Header
 if lang == "English":
     st.markdown('<div class="fantasy-title">🌌 Agentic AI Omni-Studio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">Create 4K Visual Content & Broadcast Across Social Channels in 1-Click</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">Autonomous Goal Understanding, 4K Media Generation & 1-Click Multi-Platform Broadcasting</div>', unsafe_allow_html=True)
 else:
     st.markdown('<div class="fantasy-title">🌌 एजेंटिक AI ऑम्नी-स्टूडियो</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">4K विजुअल कंटेंट बनाएं और सोशल मीडिया पर 1-क्लिक में पोस्ट करें</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fantasy-subtitle">4K विजुअल बनाएं, AI से कंटेंट अनुकूलित करें और 1-क्लिक में सभी सोशल मीडिया पर पोस्ट करें</div>', unsafe_allow_html=True)
 
 # Tabs
 tab_studio, tab_profile, tab_history, tab_guide = st.tabs([
     "🔮 Studio / पोस्ट स्टूडियो", 
-    "⚙️ Connect Accounts / प्रोफाइल और अकाउंट्स", 
+    "⚙️ Connect Accounts / प्रोफाइल सेटिंग्स", 
     "📜 History / पिछला इतिहास",
     "📖 Easy Guide / सरल मदद"
 ])
@@ -232,7 +170,7 @@ with tab_studio:
 
             source_label = "Select Content Source:" if lang == "English" else "कंटेंट का प्रकार चुनें:"
             opt1 = "✨ Generate 4K AI Nature Graphic" if lang == "English" else "✨ 4K AI नेचर ग्राफिक बनाएं"
-            opt2 = "📂 Upload Photo/Video from PC/Phone" if lang == "English" else "📂 अपने फोन/PC से फोटो या वीडियो चुनें"
+            opt2 = "📂 Upload Photo/Video from Phone/PC" if lang == "English" else "📂 अपने फोन/PC से फोटो या वीडियो चुनें"
 
             media_source = st.radio(source_label, [opt1, opt2], horizontal=True)
 
@@ -244,24 +182,13 @@ with tab_studio:
                     tfile = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
                     tfile.write(uploaded_file.read())
                     st.session_state["custom_media_path"] = tfile.name
+                    st.session_state["is_video"] = suffix.lower() in [".mp4", ".mov"]
                     st.success(f"📂 Loaded: {uploaded_file.name}")
             else:
-                btn_txt = "✨ Auto-Generate Inspiring Quote" if lang == "English" else "✨ नया विचार (Quote) जनरेट करें"
+                btn_txt = "✨ Auto-Generate Inspiring Quote / नया विचार बनाएं" if lang == "English" else "✨ नया विचार (AI Quote) जनरेट करें"
                 if st.button(btn_txt, use_container_width=True):
                     with st.spinner("🧠 AI is crafting an inspiring quote..."):
-                        chosen_quote = random.choice(INSPIRING_QUOTES)
-                        try:
-                            import ollama
-                            res = ollama.chat(
-                                model="llama3.2:3b",
-                                messages=[{
-                                    "role": "user",
-                                    "content": "Write one short, powerful, inspiring quote in 1-2 lines. Return ONLY the quote text."
-                                }]
-                            )
-                            chosen_quote = res.message.content.strip().strip('"')
-                        except Exception:
-                            pass
+                        chosen_quote = agent.generate_fresh_quote()
                         st.session_state["quote_input"] = chosen_quote
                         st.toast("✨ New inspiring quote generated!")
 
@@ -273,6 +200,23 @@ with tab_studio:
                 height=80
             )
 
+        # Dynamic AI Platform Adaptation (PPT Slide 8)
+        active_author = st.session_state["watermark"] if st.session_state["watermark"] else "AI Creator"
+        adapted_versions = agent.adapter.adapt_all_platforms(caption_text, author=active_author)
+
+        with st.expander("✨ View AI Platform-Tailored Copies (PPT Slide 8)"):
+            t_insta, t_li, t_fb, t_wa, t_tw = st.tabs(["📸 Instagram", "💼 LinkedIn", "📘 Facebook", "💬 WhatsApp", "🐦 Twitter/X"])
+            with t_insta:
+                st.code(adapted_versions["instagram"], language="markdown")
+            with t_li:
+                st.code(adapted_versions["linkedin"], language="markdown")
+            with t_fb:
+                st.code(adapted_versions["facebook"], language="markdown")
+            with t_wa:
+                st.code(adapted_versions["whatsapp"], language="markdown")
+            with t_tw:
+                st.code(adapted_versions["twitter"], language="markdown")
+
         with st.container(border=True):
             st.markdown("### 🎯 2. Social Destinations / सोशल मीडिया")
             
@@ -280,6 +224,7 @@ with tab_studio:
             with c1:
                 target_insta_story = st.checkbox("📸 Instagram Story (24h) 🟢", value=True)
                 target_insta_feed = st.checkbox("🖼️ Instagram Feed Post 🟢", value=True)
+                target_tw = st.checkbox("🐦 X / Twitter Tweet 🟢", value=True)
             with c2:
                 target_fb = st.checkbox("📘 Facebook Timeline & Feed 🟢", value=True)
                 target_li = st.checkbox("💼 LinkedIn Post 🟢", value=True)
@@ -295,9 +240,8 @@ with tab_studio:
             publish_clicked = st.button(btn_post, type="primary", use_container_width=True)
 
     # Preview Handling
-    active_author = st.session_state["watermark"] if st.session_state["watermark"] else "AI Creator"
     if preview_clicked or "latest_preview" not in st.session_state:
-        if media_source == opt1:
+        if media_source == opt1 or "custom_media_path" not in st.session_state:
             img_path = create_nature_quote_image(caption_text, author=active_author, is_story=True)
             st.session_state["latest_preview"] = img_path
         elif "custom_media_path" in st.session_state:
@@ -305,14 +249,14 @@ with tab_studio:
 
     with col_right:
         with st.container(border=True):
-            prev_title = "### 🖼️ Live 4K Visual Preview" if lang == "English" else "### 🖼️ लाइव प्रीव्यू"
+            prev_title = "### 🖼️ Live 4K Visual Preview" if lang == "English" else "### 🖼️ लाइव 4K प्रीव्यू"
             st.markdown(prev_title)
             
             preview_file = st.session_state.get("latest_preview")
             if preview_file and os.path.exists(preview_file):
                 if preview_file.lower().endswith((".png", ".jpg", ".jpeg")):
                     img = Image.open(preview_file)
-                    st.image(img, caption=f"✨ Watermark: -- {active_author}", use_container_width=True)
+                    st.image(img, caption=f"✨ Watermark Signature: -- {active_author}", use_container_width=True)
                     
                     # Direct 1-Click Download Button for ANY User!
                     with open(preview_file, "rb") as file_bytes:
@@ -323,7 +267,7 @@ with tab_studio:
                             mime="image/png",
                             use_container_width=True
                         )
-                elif preview_file.lower().endswith(".mp4"):
+                elif preview_file.lower().endswith((".mp4", ".mov")):
                     st.video(preview_file)
             else:
                 info_txt = "👈 Select a file or click 'Refresh Preview' to see your media here!" if lang == "English" else "👈 बाईं तरफ फोटो चुनें या प्रीव्यू बटन दबाएं!"
@@ -332,7 +276,7 @@ with tab_studio:
     # Multi-Platform Execution
     if publish_clicked:
         st.markdown("---")
-        st.markdown("### 📊 Live Omni-Channel Dispatch Stream")
+        st.markdown("### 📊 Live Omni-Channel Dispatch Results")
 
         if media_source == opt2 and "custom_media_path" in st.session_state:
             final_media = st.session_state["custom_media_path"]
@@ -350,8 +294,6 @@ with tab_studio:
                 "time": "Just now"
             })
 
-        st.markdown("### 📊 Live Omni-Channel Dispatch Results")
-        
         # Action Card Container
         with st.container(border=True):
             st.markdown("#### 🚀 Your Post is Ready & Broadcasted!")
@@ -385,7 +327,7 @@ with tab_studio:
                         try {{
                             await navigator.share({{
                                 title: 'Agentic AI 4K Creation',
-                                text: {json.dumps(caption_text + ' -- ' + active_author)},
+                                text: {json.dumps(adapted_versions["whatsapp"])},
                                 url: {json.dumps(img_url or 'https://dileep-ai-studio.streamlit.app')}
                             }});
                         }} catch (err) {{
@@ -405,11 +347,15 @@ with tab_studio:
             with res_col1:
                 with st.container(border=True):
                     st.markdown("#### 📸 1. Instagram Story (24h)")
-                    res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
-                    if "Published" in res or "Live" in res:
-                        st.success("✅ **Live Published to Instagram Story!**")
+                    if st.session_state["ig_token"] and st.session_state["ig_id"]:
+                        res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
+                        if res.get("status") == "SUCCESS":
+                            st.success("✅ **Live Published to Instagram Story!**")
+                        else:
+                            st.info("📸 Ready for Story! Click below to open Instagram:")
+                            st.link_button("📸 Open Instagram App/Web", "https://www.instagram.com/", use_container_width=True)
                     else:
-                        st.info("📸 Ready for Story! Click below to download graphic & upload:")
+                        st.info("📸 Ready for Story! Click below to open Instagram:")
                         st.link_button("📸 Open Instagram App/Web", "https://www.instagram.com/", use_container_width=True)
 
         # 2. Instagram Feed
@@ -417,52 +363,70 @@ with tab_studio:
             with res_col1:
                 with st.container(border=True):
                     st.markdown("#### 🖼️ 2. Instagram Feed Post")
-                    res = post_instagram_feed(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"] or None, author=active_author)
-                    if "Published" in res or "Live" in res:
-                        st.success("✅ **Live Published to Instagram Feed!**")
+                    if st.session_state["ig_token"] and st.session_state["ig_id"]:
+                        res = post_instagram_feed(content=adapted_versions["instagram"], media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
+                        if res.get("status") == "SUCCESS":
+                            st.success("✅ **Live Published to Instagram Feed!**")
+                        else:
+                            st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
                     else:
                         st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
 
-        # 3. LinkedIn (API Posting for Devs or 1-Click for Public Users)
+        # 3. LinkedIn
         if target_li:
             with res_col2:
                 with st.container(border=True):
                     st.markdown("#### 💼 3. LinkedIn Feed")
                     if st.session_state["li_token"]:
-                        res = post_linkedin(content=caption_text, media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"] or None, author=active_author)
-                        if "Published" in res or "Live" in res:
+                        res = post_linkedin(content=adapted_versions["linkedin"], media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"] or None, author=active_author)
+                        if res.get("status") == "SUCCESS":
                             st.success("✅ **Published Live on Your LinkedIn!**")
                             st.link_button("💼 View Live Post on LinkedIn", "https://www.linkedin.com/feed/", use_container_width=True)
                         else:
-                            li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
-                            st.link_button("💼 1-Click Post to Your LinkedIn", li_share_url, use_container_width=True)
+                            li_url = get_linkedin_share_url(img_url)
+                            st.link_button("💼 1-Click Post to Your LinkedIn", li_url, use_container_width=True)
                     else:
-                        li_share_url = f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}"
-                        st.link_button("💼 1-Click Post to Your LinkedIn", li_share_url, use_container_width=True)
+                        li_url = get_linkedin_share_url(img_url)
+                        st.link_button("💼 1-Click Post to Your LinkedIn", li_url, use_container_width=True)
 
-        # 4. Facebook (Universal 1-Click Timeline & Feed Post)
+        # 4. Facebook
         if target_fb:
             with res_col2:
                 with st.container(border=True):
                     st.markdown("#### 📘 4. Facebook Feed & Timeline")
-                    fb_share_url = f"https://www.facebook.com/sharer/sharer.php?u={urllib.parse.quote(img_url or 'https://dileep-ai-studio.streamlit.app')}&quote={urllib.parse.quote(caption_text)}"
-                    st.link_button("📘 Click to Publish on Facebook Feed", fb_share_url, use_container_width=True)
+                    if st.session_state["fb_page_id"] and st.session_state["fb_page_token"]:
+                        res = post_facebook_page(content=adapted_versions["facebook"], media_path_or_url=final_media, page_id=st.session_state["fb_page_id"], page_access_token=st.session_state["fb_page_token"], author=active_author)
+                        if res.get("status") == "SUCCESS":
+                            st.success("✅ **Published Live on Your Facebook Page!**")
+                        else:
+                            fb_url = get_facebook_share_url(img_url, adapted_versions["facebook"])
+                            st.link_button("📘 Click to Publish on Facebook Timeline", fb_url, use_container_width=True)
+                    else:
+                        fb_url = get_facebook_share_url(img_url, adapted_versions["facebook"])
+                        st.link_button("📘 Click to Publish on Facebook Timeline", fb_url, use_container_width=True)
 
-        # 5. WhatsApp (Universal 1-Click Delivery)
+        # 5. WhatsApp
         if target_wa:
             with res_col2:
                 with st.container(border=True):
                     st.markdown("#### 💬 5. WhatsApp Delivery")
                     wa_phone = st.session_state["phone"].replace("+", "").strip() if st.session_state["phone"] else ""
-                    wa_text = f"{caption_text} -- {active_author}\n\n📸 4K Media: {img_url}" if img_url else caption_text
-                    wa_share_url = f"https://api.whatsapp.com/send?phone={wa_phone}&text={urllib.parse.quote(wa_text)}" if wa_phone else f"https://api.whatsapp.com/send?text={urllib.parse.quote(wa_text)}"
-                    st.link_button("💬 Click to Deliver on WhatsApp", wa_share_url, use_container_width=True)
+                    wa_res = post_whatsapp(content=adapted_versions["whatsapp"], target=wa_phone, media_path_or_url=img_url, author=active_author)
+                    st.link_button("💬 Click to Deliver on WhatsApp", wa_res["action_url"], use_container_width=True)
+
+        # 6. Twitter / X
+        if target_tw:
+            with res_col1:
+                with st.container(border=True):
+                    st.markdown("#### 🐦 6. X / Twitter Tweet")
+                    tw_res = post_twitter_x(content=adapted_versions["twitter"], media_path_or_url=img_url, author=active_author)
+                    st.link_button("🐦 Click to Tweet on X", tw_res["action_url"], use_container_width=True)
 
         st.balloons()
         st.toast("🎉 Grand Omni-Channel Broadcast Completed!")
 
 # ==========================================
-# TAB 2: USER PROFILE & SETTINGS (CLEAN & 100% ERROR-FREE)
+# TAB 2: USER PROFILE & SETTINGS
 # ==========================================
 with tab_profile:
     with st.container(border=True):
@@ -472,11 +436,10 @@ with tab_profile:
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
 
     with col_left_form:
-        # Profile Section
         with st.container(border=True):
             st.markdown("#### 🏷️ 1. Your Details")
             input_name = st.text_input("Signature Name / आपका नाम (Watermark):", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
-            input_phone = st.text_input("WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number / व्हाट्सएप नंबर (e.g. +91...)")
+            input_phone = st.text_input("WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
 
         b_save, b_reset = st.columns([1.5, 1])
         with b_save:
@@ -494,13 +457,19 @@ with tab_profile:
                 st.session_state["li_token"] = ""
                 st.rerun()
 
-        # Pro Developer API Settings (Collapsed & Safe)
+        # Pro Developer API Settings (Optional)
         with st.expander("🛠️ Pro Developer API Settings (Optional)"):
             st.caption("Only for developers who want automated background Graph API posting.")
-            input_ig_token = st.text_input("Meta Access Token (Optional):", value=st.session_state["ig_token"], type="password")
-            input_li_token = st.text_input("LinkedIn Access Token (Optional):", value=st.session_state["li_token"], type="password")
+            input_ig_id = st.text_input("Instagram Business Account ID:", value=st.session_state["ig_id"])
+            input_ig_token = st.text_input("Meta / Instagram Access Token:", value=st.session_state["ig_token"], type="password")
+            input_fb_page_id = st.text_input("Facebook Page ID:", value=st.session_state["fb_page_id"])
+            input_fb_page_token = st.text_input("Facebook Page Access Token:", value=st.session_state["fb_page_token"], type="password")
+            input_li_token = st.text_input("LinkedIn Access Token:", value=st.session_state["li_token"], type="password")
             if st.button("Save API Tokens"):
+                st.session_state["ig_id"] = input_ig_id
                 st.session_state["ig_token"] = input_ig_token
+                st.session_state["fb_page_id"] = input_fb_page_id
+                st.session_state["fb_page_token"] = input_fb_page_token
                 st.session_state["li_token"] = input_li_token
                 st.success("API Tokens Saved!")
 
@@ -512,21 +481,10 @@ with tab_profile:
             
             st.markdown(f"🏷️ **Active Signature:** 🟢 `{user_lbl}`")
             st.markdown(f"💬 **WhatsApp Target:** 🟢 `{phone_lbl}`")
-            
-            if st.session_state["ig_token"]:
-                st.markdown(f"📸 **Instagram:** 🟢 `Connected ({st.session_state['ig_user']})`")
-            else:
-                st.markdown("📸 **Instagram:** 🟢 `1-Click Direct Share Ready`")
-
-            if st.session_state["fb_name"]:
-                st.markdown(f"📘 **Facebook:** 🟢 `Connected ({st.session_state['fb_name']})`")
-            else:
-                st.markdown("📘 **Facebook:** 🟢 `1-Click Feed Share Ready`")
-
-            if st.session_state["li_token"]:
-                st.markdown(f"💼 **LinkedIn:** 🟢 `Connected ({st.session_state['li_name']})`")
-            else:
-                st.markdown("💼 **LinkedIn:** 🟢 `1-Click Share Ready`")
+            st.markdown(f"📸 **Instagram:** 🟢 `{'Connected' if st.session_state['ig_token'] else '1-Click Direct Share Ready'}`")
+            st.markdown(f"📘 **Facebook:** 🟢 `{'Connected' if st.session_state['fb_page_token'] else '1-Click Share Ready'}`")
+            st.markdown(f"💼 **LinkedIn:** 🟢 `{'Connected' if st.session_state['li_token'] else '1-Click Share Ready'}`")
+            st.markdown("🐦 **Twitter / X:** 🟢 `1-Click Tweet Ready`")
 
         if st.session_state["watermark"]:
             st.success(f"✨ Signature Watermark: **-- {st.session_state['watermark']}**")
@@ -559,7 +517,7 @@ with tab_guide:
         1. **Set Your Name / अपना नाम लिखें:**
            - Go to **Tab 2 (Connect Accounts)** and enter your name (e.g. *Dileep Yadav*).
         2. **Create or Upload Media / फोटो या वीडियो चुनें:**
-           - Go to **Tab 1 (Studio)**, type your quote, click **"Auto-Generate Inspiring Quote"** or upload any photo/video from your folder!
+           - Go to **Tab 1 (Studio)**, type your quote, click **"✨ Auto-Generate Inspiring Quote"** or upload any photo/video from your phone/PC!
         3. **1-Click Broadcast Everywhere / पोस्ट करें:**
-           - Hit **"🚀 Launch Multi-Platform Post"** to broadcast to **Instagram Story, Feed, Facebook Timeline, LinkedIn & WhatsApp** in 1 second!
+           - Hit **"🚀 Launch Multi-Platform Post"** to broadcast to **Instagram Story, Feed, Facebook Timeline, LinkedIn, WhatsApp & Twitter (X)** in 1 second!
         """)

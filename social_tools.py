@@ -515,12 +515,43 @@ def post_whatsapp(content: str, target: str = None, media_path_or_url: str = Non
     if media_path_or_url:
         msg += f"\n\n📸 4K Media: {media_path_or_url}"
 
+    action_url = f"https://api.whatsapp.com/send?phone={phone.replace('+', '').strip()}&text={urllib.parse.quote(msg)}" if phone else f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg)}"
     return {
         "status": "SUCCESS",
         "target_phone": phone or "Ready for Chat Selection",
-        "action_url": f"https://api.whatsapp.com/send?phone={phone.replace('+', '')}&text={urllib.parse.quote(msg)}" if phone else f"https://api.whatsapp.com/send?text={urllib.parse.quote(msg)}",
+        "action_url": action_url,
         "message": f"WhatsApp direct broadcast ready for {phone or 'any contact'}."
     }
+
+
+def post_twitter_x(content: str, media_path_or_url: str = None, author: str = None) -> dict:
+    """
+    Prepares Twitter / X 1-Click Tweet Intent.
+    """
+    sign = author or WATERMARK_NAME
+    tweet_text = f"{content}\n\n-- {sign}\n#Motivation #AgenticAI"
+    if media_path_or_url and media_path_or_url.startswith("http"):
+        tweet_text += f"\n📸 {media_path_or_url}"
+
+    tweet_url = f"https://twitter.com/intent/tweet?text={urllib.parse.quote(tweet_text)}"
+    return {
+        "status": "SUCCESS",
+        "platform": "twitter",
+        "action_url": tweet_url,
+        "message": "Twitter / X 1-Click Tweet ready."
+    }
+
+
+def get_facebook_share_url(media_url: str, caption: str = "") -> str:
+    """Generates official Facebook universal share dialog URL."""
+    u = media_url or "https://dileep-ai-studio.streamlit.app"
+    return f"https://www.facebook.com/sharer/sharer.php?u={urllib.parse.quote(u)}&quote={urllib.parse.quote(caption)}"
+
+
+def get_linkedin_share_url(media_url: str) -> str:
+    """Generates official LinkedIn universal share offsite URL."""
+    u = media_url or "https://dileep-ai-studio.streamlit.app"
+    return f"https://www.linkedin.com/sharing/share-offsite/?url={urllib.parse.quote(u)}"
 
 
 def post_instagram_reel(content: str, video_path_or_url: str = None) -> str:

@@ -215,8 +215,34 @@ def run_production_audit():
     assert agent_data["status"] == "completed", f"Agent status not completed: {agent_data}"
     print(f"[PASS] Existing Agentic AI core tools, planner, and execution loop 100% functional!", flush=True)
 
+    # ----------------------------------------------------
+    # TEST 7: Platform-Specific AI Content Adaptation (PPT Slide 8)
+    # ----------------------------------------------------
+    print("\n[TEST 7] Testing Platform-Specific AI Content Adaptation (PPT Slide 8)...", flush=True)
+    from ai_agent import agent as autonomous_agent
+    adapted = autonomous_agent.adapter.adapt_all_platforms("Discipline is the bridge to mastery.", author="Dileep")
+    assert "instagram" in adapted and "#Motivation" in adapted["instagram"], "Missing Instagram hashtags"
+    assert "linkedin" in adapted and "#Leadership" in adapted["linkedin"], "Missing LinkedIn professional tags"
+    assert "facebook" in adapted and "Do you agree" in adapted["facebook"], "Missing Facebook engagement copy"
+    assert "whatsapp" in adapted and "*Daily Inspiration*" in adapted["whatsapp"], "Missing WhatsApp format"
+    assert "twitter" in adapted and len(adapted["twitter"]) <= 280, "Twitter copy exceeds 280 chars"
+    print(f"[PASS] 1 Core Input successfully transformed into 5 distinct platform-tailored copies (Zero copy-paste)!", flush=True)
+
+    # ----------------------------------------------------
+    # TEST 8: Twitter/X & Share Intent Dispatchers
+    # ----------------------------------------------------
+    print("\n[TEST 8] Testing Twitter/X & Universal Share Dispatchers...", flush=True)
+    from social_tools import post_twitter_x, get_facebook_share_url, get_linkedin_share_url
+    tw_res = post_twitter_x("Testing Twitter", author="Dileep")
+    assert tw_res["status"] == "SUCCESS" and "twitter.com/intent/tweet" in tw_res["action_url"]
+    fb_url = get_facebook_share_url("https://example.com/photo.png", "My Caption")
+    assert "facebook.com/sharer" in fb_url
+    li_url = get_linkedin_share_url("https://example.com/photo.png")
+    assert "linkedin.com/sharing/share-offsite" in li_url
+    print(f"[PASS] Twitter/X, Facebook and LinkedIn universal share URLs generated flawlessly!", flush=True)
+
     print("\n" + "=" * 60, flush=True)
-    print("🏆 ALL 6 PRODUCTION AUDIT & VERIFICATION TESTS PASSED 100%!", flush=True)
+    print("🏆 ALL 8 PRODUCTION AUDIT & VERIFICATION TESTS PASSED 100%!", flush=True)
     print("=" * 60, flush=True)
 
 if __name__ == "__main__":
