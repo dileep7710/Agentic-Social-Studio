@@ -105,23 +105,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize Isolated Per-User Session State
+from dotenv import load_dotenv
+load_dotenv()
+
+# Initialize Isolated Per-User Session State with environment defaults
 if "watermark" not in st.session_state:
-    st.session_state["watermark"] = ""
+    st.session_state["watermark"] = os.getenv("WATERMARK_NAME", "Dileep Yadav")
 if "phone" not in st.session_state:
-    st.session_state["phone"] = ""
+    st.session_state["phone"] = os.getenv("WHATSAPP_DEFAULT_PHONE", "+917710278967")
 if "ig_id" not in st.session_state:
-    st.session_state["ig_id"] = ""
+    st.session_state["ig_id"] = os.getenv("INSTAGRAM_ACCOUNT_ID", "17841448994358440")
 if "ig_token" not in st.session_state:
-    st.session_state["ig_token"] = ""
+    st.session_state["ig_token"] = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 if "fb_page_id" not in st.session_state:
-    st.session_state["fb_page_id"] = ""
+    st.session_state["fb_page_id"] = os.getenv("FACEBOOK_PAGE_ID", "61583785015768")
 if "fb_page_token" not in st.session_state:
-    st.session_state["fb_page_token"] = ""
+    st.session_state["fb_page_token"] = os.getenv("INSTAGRAM_ACCESS_TOKEN", "")
 if "li_token" not in st.session_state:
-    st.session_state["li_token"] = ""
+    st.session_state["li_token"] = os.getenv("LINKEDIN_ACCESS_TOKEN", "")
 if "li_urn" not in st.session_state:
-    st.session_state["li_urn"] = ""
+    st.session_state["li_urn"] = os.getenv("LINKEDIN_AUTHOR_URN", "urn:li:person:neomMhUioZ")
 if "history" not in st.session_state:
     st.session_state["history"] = []
 
@@ -350,9 +353,9 @@ with tab_studio:
                     if st.session_state["ig_token"] and st.session_state["ig_id"]:
                         res = post_instagram_story(content=caption_text, media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                         if res.get("status") == "SUCCESS":
-                            st.success("✅ **Live Published to Instagram Story!**")
+                            st.success(f"✅ **Live Published to Instagram Story!** (ID: `{res.get('post_id')}`)")
                         else:
-                            st.info("📸 Ready for Story! Click below to open Instagram:")
+                            st.info(f"📸 Meta Notice: {res.get('message', 'API direct post requires active business token.')}")
                             st.link_button("📸 Open Instagram App/Web", "https://www.instagram.com/", use_container_width=True)
                     else:
                         st.info("📸 Ready for Story! Click below to open Instagram:")
@@ -366,8 +369,9 @@ with tab_studio:
                     if st.session_state["ig_token"] and st.session_state["ig_id"]:
                         res = post_instagram_feed(content=adapted_versions["instagram"], media_path_or_url=img_url or final_media, user_id=st.session_state["ig_id"], access_token=st.session_state["ig_token"], author=active_author)
                         if res.get("status") == "SUCCESS":
-                            st.success("✅ **Live Published to Instagram Feed!**")
+                            st.success(f"✅ **Live Published to Instagram Feed!** (ID: `{res.get('post_id')}`)")
                         else:
+                            st.info(f"🖼️ Meta Notice: {res.get('message', 'API direct post requires active business token.')}")
                             st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
                     else:
                         st.link_button("🖼️ Open Instagram Feed", "https://www.instagram.com/", use_container_width=True)
@@ -380,9 +384,10 @@ with tab_studio:
                     if st.session_state["li_token"]:
                         res = post_linkedin(content=adapted_versions["linkedin"], media_path_or_url=final_media, access_token=st.session_state["li_token"], author_urn=st.session_state["li_urn"] or None, author=active_author)
                         if res.get("status") == "SUCCESS":
-                            st.success("✅ **Published Live on Your LinkedIn!**")
+                            st.success(f"✅ **Published Live on Your LinkedIn!** (Post ID: `{res.get('post_id')}`)")
                             st.link_button("💼 View Live Post on LinkedIn", "https://www.linkedin.com/feed/", use_container_width=True)
                         else:
+                            st.warning(f"⚠️ LinkedIn Notice: {res.get('message', 'Direct API post requires active token.')}")
                             li_url = get_linkedin_share_url(img_url)
                             st.link_button("💼 1-Click Post to Your LinkedIn", li_url, use_container_width=True)
                     else:
@@ -397,7 +402,7 @@ with tab_studio:
                     if st.session_state["fb_page_id"] and st.session_state["fb_page_token"]:
                         res = post_facebook_page(content=adapted_versions["facebook"], media_path_or_url=final_media, page_id=st.session_state["fb_page_id"], page_access_token=st.session_state["fb_page_token"], author=active_author)
                         if res.get("status") == "SUCCESS":
-                            st.success("✅ **Published Live on Your Facebook Page!**")
+                            st.success(f"✅ **Published Live on Your Facebook Page!** (Post ID: `{res.get('post_id')}`)")
                         else:
                             fb_url = get_facebook_share_url(img_url, adapted_versions["facebook"])
                             st.link_button("📘 Click to Publish on Facebook Timeline", fb_url, use_container_width=True)
