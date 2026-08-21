@@ -1,27 +1,46 @@
 import os
 import json
 import uuid
+import tempfile
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
 from pathlib import Path
 import httpx
-from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, Query, UploadFile, File, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
 from backend.database import get_db, init_db
-from backend.models import User, TaskLog, PlatformSettings, SocialAccount, PostLog, PlatformPostResult
+from backend.models import (
+    User,
+    UserSession,
+    SocialAccount,
+    PostLog,
+    PlatformPostResult,
+    TaskLog,
+    PlatformSettings,
+    AuditLog,
+    MediaFile
+)
+from backend.crypto import encrypt_token, decrypt_token, hash_token
 from backend.auth import (
     get_password_hash,
     verify_password,
     create_access_token,
+    create_user_session,
+    rotate_refresh_token,
+    set_auth_cookies,
+    clear_auth_cookies,
     get_current_user,
     require_current_user,
+    check_account_lockout,
+    record_failed_login,
+    reset_failed_login,
     SECRET_KEY,
     ALGORITHM
 )
@@ -43,23 +62,86 @@ META_APP_ID = os.getenv("META_APP_ID", os.getenv("FACEBOOK_APP_ID", "17841448994
 META_APP_SECRET = os.getenv("META_APP_SECRET", os.getenv("FACEBOOK_APP_SECRET", ""))
 META_REDIRECT_URI = os.getenv("META_REDIRECT_URI", "http://localhost:8000/api/auth/meta/callback")
 
-# Initialize DB tables
+# Initialize DB tables and migrations
 init_db()
 
 app = FastAPI(
-    title="Agentic AI Omni-Studio Multi-Account API",
-    description="Production-grade API for autonomous Agentic AI and multi-account social media publishing with Meta OAuth.",
-    version="2.2.0"
+    title="OneClick Post Secure Enterprise API",
+    description="Production-grade API with AES-256-GCM token encryption, HttpOnly session cookies, refresh token rotation, and multi-platform publishing.",
+    version="3.0.0"
 )
 
-# Enable CORS
+# Allowed CORS Origins
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+]
+custom_origin = os.getenv("FRONTEND_URL", "")
+if custom_origin and custom_origin not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append(custom_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ==========================================
+# SECURITY HEADERS MIDDLEWARE
+# ==========================================
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "img-src 'self' data: https: blob:; "
+        "media-src 'self' https: blob:; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com;"
+    )
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return response
+
+
+# ==========================================
+# IN-MEMORY RATE LIMITER (BRUTE FORCE DEFENSE)
+# ==========================================
+
+_FAILED_ATTEMPTS: Dict[str, List[datetime]] = {}
+
+def check_ip_rate_limit(ip: str, max_attempts: int = 10, window_minutes: int = 15):
+    now = datetime.utcnow()
+    window_start = now - timedelta(minutes=window_minutes)
+    
+    # Filter attempts within window
+    if ip in _FAILED_ATTEMPTS:
+        _FAILED_ATTEMPTS[ip] = [t for t in _FAILED_ATTEMPTS[ip] if t > window_start]
+        if len(_FAILED_ATTEMPTS[ip]) >= max_attempts:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed requests. Please try again in 15 minutes."
+            )
+    else:
+        _FAILED_ATTEMPTS[ip] = []
+
+def record_ip_failure(ip: str):
+    if ip:
+        if ip not in _FAILED_ATTEMPTS:
+            _FAILED_ATTEMPTS[ip] = []
+        _FAILED_ATTEMPTS[ip].append(datetime.utcnow())
+
 
 # ==========================================
 # PYDANTIC SCHEMAS
@@ -73,16 +155,21 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    remember_me: Optional[bool] = False
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: Optional[str] = None
 
 class TaskRunRequest(BaseModel):
     task: str
 
 class ConnectAccountRequest(BaseModel):
-    platform: str # 'instagram', 'facebook', 'linkedin', 'whatsapp'
-    platform_account_id: str # IG ID / FB Page ID / URN / Phone
-    platform_account_name: str # e.g. '@brand_insta', 'Tech Page'
+    platform: str
+    platform_account_id: str
+    platform_account_name: str
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+    scopes: Optional[str] = None
 
 class MultiAccountPublishRequest(BaseModel):
     content: str
@@ -97,29 +184,63 @@ class ProfileUpdateRequest(BaseModel):
 
 
 # ==========================================
-# AUTH ENDPOINTS
+# AUTH & SESSION ENDPOINTS
 # ==========================================
 
 @app.post("/api/auth/register")
-def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == req.email).first()
+def register_user(
+    req: RegisterRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    ip_addr = request.client.host if request.client else ""
+    user_agent = request.headers.get("User-Agent", "Unknown")
+    
+    if len(req.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters long.")
+
+    existing = db.query(User).filter(User.email == req.email.lower().strip()).first()
     if existing:
-        raise HTTPException(status_code=400, detail="User with this email already exists")
+        raise HTTPException(status_code=400, detail="User with this email already exists.")
 
     hashed_pw = get_password_hash(req.password)
     new_user = User(
-        name=req.name,
-        email=req.email,
-        hashed_password=hashed_pw
+        name=req.name.strip(),
+        email=req.email.lower().strip(),
+        hashed_password=hashed_pw,
+        failed_login_attempts=0,
+        last_login_at=datetime.utcnow()
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    token = create_access_token({"sub": new_user.email, "id": new_user.id, "name": new_user.name})
+    # Create persistent session and issue cookie + token
+    access_token, refresh_token, _ = create_user_session(
+        user=new_user,
+        remember_me=True,
+        device_info=user_agent,
+        ip_address=ip_addr,
+        db=db
+    )
+    set_auth_cookies(response, access_token, refresh_token, remember_me=True)
+
+    # Audit log
+    audit = AuditLog(
+        user_id=new_user.id,
+        event_type="REGISTER_SUCCESS",
+        ip_address=ip_addr,
+        user_agent=user_agent,
+        details='{"status": "account_created"}'
+    )
+    db.add(audit)
+    db.commit()
+
     return {
         "status": "success",
-        "token": token,
+        "token": access_token,
+        "refresh_token": refresh_token,
         "user": {
             "id": new_user.id,
             "name": new_user.name,
@@ -129,15 +250,51 @@ def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @app.post("/api/auth/login")
-def login_user(req: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
-    if not user or not verify_password(req.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+def login_user(
+    req: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    ip_addr = request.client.host if request.client else ""
+    user_agent = request.headers.get("User-Agent", "Unknown")
+    
+    # Check IP-level rate limiting
+    check_ip_rate_limit(ip_addr)
 
-    token = create_access_token({"sub": user.email, "id": user.id, "name": user.name})
+    email_clean = req.email.lower().strip()
+    user = db.query(User).filter(User.email == email_clean).first()
+
+    if not user:
+        record_ip_failure(ip_addr)
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    # Check account lockout
+    check_account_lockout(user)
+
+    # Verify password hash
+    if not verify_password(req.password, user.hashed_password):
+        record_ip_failure(ip_addr)
+        record_failed_login(user, db, ip_address=ip_addr, user_agent=user_agent)
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+
+    # Success: reset lockout counters
+    reset_failed_login(user, db, ip_address=ip_addr, user_agent=user_agent)
+
+    # Create active session record & rotate tokens
+    access_token, refresh_token, _ = create_user_session(
+        user=user,
+        remember_me=req.remember_me or False,
+        device_info=user_agent,
+        ip_address=ip_addr,
+        db=db
+    )
+    set_auth_cookies(response, access_token, refresh_token, remember_me=req.remember_me or False)
+
     return {
         "status": "success",
-        "token": token,
+        "token": access_token,
+        "refresh_token": refresh_token,
         "user": {
             "id": user.id,
             "name": user.name,
@@ -146,13 +303,268 @@ def login_user(req: LoginRequest, db: Session = Depends(get_db)):
     }
 
 
+@app.post("/api/auth/refresh")
+def refresh_session(
+    request: Request,
+    response: Response,
+    req: Optional[RefreshTokenRequest] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Transparently rotates refresh token and issues fresh access token.
+    Reads refresh token from HttpOnly cookie or request body.
+    """
+    raw_refresh = None
+    if req and req.refresh_token:
+        raw_refresh = req.refresh_token
+    elif request.cookies.get("refresh_token"):
+        raw_refresh = request.cookies.get("refresh_token")
+
+    if not raw_refresh:
+        raise HTTPException(status_code=401, detail="No refresh token provided.")
+
+    ip_addr = request.client.host if request.client else ""
+    user_agent = request.headers.get("User-Agent", "Unknown")
+
+    new_access_token, new_refresh_token, user = rotate_refresh_token(
+        raw_refresh_token=raw_refresh,
+        device_info=user_agent,
+        ip_address=ip_addr,
+        db=db
+    )
+
+    set_auth_cookies(response, new_access_token, new_refresh_token, remember_me=True)
+
+    # Audit log
+    audit = AuditLog(
+        user_id=user.id,
+        event_type="TOKEN_REFRESH",
+        ip_address=ip_addr,
+        user_agent=user_agent,
+        details='{"status": "session_rotated"}'
+    )
+    db.add(audit)
+    db.commit()
+
+    return {
+        "status": "success",
+        "token": new_access_token,
+        "refresh_token": new_refresh_token
+    }
+
+
+@app.post("/api/auth/logout")
+def logout_user(
+    request: Request,
+    response: Response,
+    user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Logs out the user from the current device session and clears HttpOnly cookies.
+    """
+    if user:
+        token = request.cookies.get("access_token")
+        if not token:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]
+
+        if token:
+            try:
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                sid = payload.get("sid")
+                if sid:
+                    sid_h = hash_token(sid)
+                    session = db.query(UserSession).filter(
+                        UserSession.user_id == user.id,
+                        UserSession.session_token_hash == sid_h
+                    ).first()
+                    if session:
+                        session.is_revoked = True
+                        db.commit()
+            except Exception:
+                pass
+
+        audit = AuditLog(
+            user_id=user.id,
+            event_type="LOGOUT",
+            ip_address=request.client.host if request.client else "",
+            user_agent=request.headers.get("User-Agent", ""),
+            details='{"scope": "current_device"}'
+        )
+        db.add(audit)
+        db.commit()
+
+    clear_auth_cookies(response)
+    return {"status": "success", "message": "Logged out successfully."}
+
+
+@app.post("/api/auth/logout-all")
+def logout_all_devices(
+    request: Request,
+    response: Response,
+    user: User = Depends(require_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revokes ALL active device sessions for the authenticated user.
+    """
+    sessions = db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.is_revoked == False
+    ).all()
+
+    for s in sessions:
+        s.is_revoked = True
+    
+    audit = AuditLog(
+        user_id=user.id,
+        event_type="LOGOUT_ALL",
+        ip_address=request.client.host if request.client else "",
+        user_agent=request.headers.get("User-Agent", ""),
+        details=f'{{"revoked_sessions": {len(sessions)}}}'
+    )
+    db.add(audit)
+    db.commit()
+
+    clear_auth_cookies(response)
+    return {"status": "success", "message": f"Successfully logged out of {len(sessions)} active devices."}
+
+
+@app.get("/api/auth/sessions")
+def list_active_sessions(
+    request: Request,
+    user: User = Depends(require_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns list of all active/recent device sessions for the user.
+    """
+    # Extract current session identifier
+    current_sid_hash = None
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+    if token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            sid = payload.get("sid")
+            if sid:
+                current_sid_hash = hash_token(sid)
+        except Exception:
+            pass
+
+    sessions = db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.is_revoked == False,
+        UserSession.expires_at > datetime.utcnow()
+    ).order_by(UserSession.last_active_at.desc()).all()
+
+    return [
+        {
+            "id": s.id,
+            "device_info": s.device_info,
+            "ip_address": s.ip_address,
+            "remember_me": s.remember_me,
+            "created_at": s.created_at.strftime("%Y-%m-%d %H:%M"),
+            "last_active": s.last_active_at.strftime("%Y-%m-%d %H:%M") if s.last_active_at else "",
+            "is_current": (s.session_token_hash == current_sid_hash)
+        }
+        for s in sessions
+    ]
+
+
+@app.delete("/api/auth/sessions/{session_id}")
+def revoke_specific_session(
+    session_id: int,
+    user: User = Depends(require_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revokes a specific device session with strict IDOR ownership check.
+    """
+    session = db.query(UserSession).filter(
+        UserSession.id == session_id,
+        UserSession.user_id == user.id
+    ).first()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Device session not found or unauthorized.")
+
+    session.is_revoked = True
+    db.commit()
+    return {"status": "success", "message": "Device session revoked successfully."}
+
+
 @app.get("/api/auth/me")
 def get_me(user: User = Depends(require_current_user)):
     return {
         "id": user.id,
         "name": user.name,
-        "email": user.email
+        "email": user.email,
+        "last_login_at": user.last_login_at.strftime("%Y-%m-%d %H:%M") if user.last_login_at else None
     }
+
+
+# ==========================================
+# ACCOUNT DELETION & AUDIT LOGS (GDPR COMPLIANT)
+# ==========================================
+
+@app.delete("/api/account/me")
+def delete_my_account(
+    request: Request,
+    response: Response,
+    user: User = Depends(require_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently deletes user account, purging all encrypted tokens, sessions,
+    media files, post logs, and personal data.
+    """
+    # 1. Log account deletion audit
+    audit = AuditLog(
+        user_id=None,
+        event_type="ACCOUNT_DELETED",
+        ip_address=request.client.host if request.client else "",
+        user_agent=request.headers.get("User-Agent", ""),
+        details=f'{{"deleted_user_email": "{user.email}"}}'
+    )
+    db.add(audit)
+
+    # 2. Delete user (cascades to sessions, social_accounts, post_logs, media_files, task_logs)
+    db.delete(user)
+    db.commit()
+
+    clear_auth_cookies(response)
+    return {"status": "success", "message": "Your account and all associated data have been permanently deleted."}
+
+
+@app.get("/api/audit-logs")
+def get_user_audit_logs(
+    limit: int = 20,
+    user: User = Depends(require_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns security audit trail for the authenticated user without sensitive data leakage.
+    """
+    logs = db.query(AuditLog).filter(
+        AuditLog.user_id == user.id
+    ).order_by(AuditLog.id.desc()).limit(limit).all()
+
+    return [
+        {
+            "id": l.id,
+            "event_type": l.event_type,
+            "ip_address": l.ip_address,
+            "user_agent": l.user_agent,
+            "timestamp": l.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        for l in logs
+    ]
 
 
 # ==========================================
@@ -164,7 +576,6 @@ def get_meta_oauth_url(user: User = Depends(require_current_user)):
     """
     Generates a secure Meta OAuth dialog URL signed with user_id in the state JWT.
     """
-    # Create signed state token with 15-minute expiration
     state_payload = {
         "user_id": user.id,
         "nonce": uuid.uuid4().hex,
@@ -197,13 +608,13 @@ def meta_oauth_callback(
     db: Session = Depends(get_db)
 ):
     """
-    Handles Meta OAuth code exchange, upgrades to Long-Lived Token, discovers Instagram accounts, and saves SocialAccount records.
+    Handles Meta OAuth code exchange, upgrades to Long-Lived Token,
+    encrypts tokens with AES-256-GCM, and saves SocialAccount records.
     """
     if error or not code or not state:
         err_msg = error_description or error or "OAuth authorization was cancelled or failed."
         return RedirectResponse(url=f"/social?oauth=error&msg={urllib.parse.quote(err_msg)}")
 
-    # Verify and decode state JWT
     try:
         payload = jwt.decode(state, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("user_id")
@@ -212,7 +623,6 @@ def meta_oauth_callback(
     except JWTError:
         return RedirectResponse(url="/social?oauth=error&msg=Invalid+or+expired+OAuth+state+token")
 
-    # Verify user exists in database
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return RedirectResponse(url="/social?oauth=error&msg=User+not+found")
@@ -254,7 +664,7 @@ def meta_oauth_callback(
                 except Exception:
                     pass
 
-            # 3. Discover Pages and linked Instagram Business / Professional Accounts
+            # 3. Discover Pages and linked Instagram Accounts
             accounts_res = client.get(
                 "https://graph.facebook.com/v21.0/me/accounts",
                 params={
@@ -285,7 +695,7 @@ def meta_oauth_callback(
 
                     if existing_ig:
                         existing_ig.platform_account_name = f"@{ig_username}"
-                        existing_ig.access_token = page_token
+                        existing_ig.set_encrypted_access_token(page_token)
                         existing_ig.status = "ACTIVE"
                         existing_ig.expires_at = datetime.utcnow() + timedelta(days=60)
                     else:
@@ -294,10 +704,10 @@ def meta_oauth_callback(
                             platform="instagram",
                             platform_account_id=ig_id,
                             platform_account_name=f"@{ig_username}",
-                            access_token=page_token,
                             status="ACTIVE",
                             expires_at=datetime.utcnow() + timedelta(days=60)
                         )
+                        new_ig.set_encrypted_access_token(page_token)
                         db.add(new_ig)
                     connected_count += 1
 
@@ -310,7 +720,7 @@ def meta_oauth_callback(
 
                 if existing_fb:
                     existing_fb.platform_account_name = page_name
-                    existing_fb.access_token = page_token
+                    existing_fb.set_encrypted_access_token(page_token)
                     existing_fb.status = "ACTIVE"
                     existing_fb.expires_at = datetime.utcnow() + timedelta(days=60)
                 else:
@@ -319,14 +729,22 @@ def meta_oauth_callback(
                         platform="facebook",
                         platform_account_id=page_id,
                         platform_account_name=page_name,
-                        access_token=page_token,
                         status="ACTIVE",
                         expires_at=datetime.utcnow() + timedelta(days=60)
                     )
+                    new_fb.set_encrypted_access_token(page_token)
                     db.add(new_fb)
                 connected_count += 1
 
+            # Audit log
+            audit = AuditLog(
+                user_id=user.id,
+                event_type="SOCIAL_CONNECTED",
+                details=f'{{"provider": "meta", "accounts_connected": {connected_count}}}'
+            )
+            db.add(audit)
             db.commit()
+
             return RedirectResponse(url=f"/social?oauth=success&connected={connected_count}")
 
     except Exception as ex:
@@ -349,7 +767,9 @@ def get_user_social_accounts(user: User = Depends(require_current_user), db: Ses
             "platform": acc.platform,
             "platform_account_id": acc.platform_account_id,
             "platform_account_name": acc.platform_account_name,
+            "scopes": acc.scopes,
             "status": acc.status,
+            "expires_at": acc.expires_at.strftime("%Y-%m-%d %H:%M") if acc.expires_at else None,
             "created_at": acc.created_at.strftime("%Y-%m-%d %H:%M") if acc.created_at else ""
         }
         for acc in accounts
@@ -359,7 +779,7 @@ def get_user_social_accounts(user: User = Depends(require_current_user), db: Ses
 @app.post("/api/social/accounts")
 def connect_social_account(req: ConnectAccountRequest, user: User = Depends(require_current_user), db: Session = Depends(get_db)):
     """
-    Connects a new social account/page for the authenticated user (Manual fallback).
+    Connects a new social account with AES-256-GCM token encryption at rest.
     """
     existing = db.query(SocialAccount).filter(
         SocialAccount.user_id == user.id,
@@ -369,7 +789,10 @@ def connect_social_account(req: ConnectAccountRequest, user: User = Depends(requ
 
     if existing:
         existing.platform_account_name = req.platform_account_name
-        existing.access_token = req.access_token or existing.access_token
+        if req.access_token:
+            existing.set_encrypted_access_token(req.access_token)
+        if req.refresh_token:
+            existing.set_encrypted_refresh_token(req.refresh_token)
         existing.status = "ACTIVE"
         db.commit()
         db.refresh(existing)
@@ -380,11 +803,23 @@ def connect_social_account(req: ConnectAccountRequest, user: User = Depends(requ
         platform=req.platform.lower(),
         platform_account_id=req.platform_account_id,
         platform_account_name=req.platform_account_name,
-        access_token=req.access_token,
-        refresh_token=req.refresh_token,
+        scopes=req.scopes or "",
         status="ACTIVE"
     )
+    if req.access_token:
+        new_acc.set_encrypted_access_token(req.access_token)
+    if req.refresh_token:
+        new_acc.set_encrypted_refresh_token(req.refresh_token)
+
     db.add(new_acc)
+    
+    # Audit log
+    audit = AuditLog(
+        user_id=user.id,
+        event_type="SOCIAL_CONNECTED",
+        details=f'{{"platform": "{req.platform.lower()}", "account_name": "{req.platform_account_name}"}}'
+    )
+    db.add(audit)
     db.commit()
     db.refresh(new_acc)
 
@@ -407,29 +842,87 @@ def delete_social_account(account_id: int, user: User = Depends(require_current_
     if acc.user_id != user.id:
         raise HTTPException(status_code=403, detail="Forbidden: You do not own this account")
 
+    platform_name = acc.platform
+    acc_name = acc.platform_account_name
     db.delete(acc)
+
+    audit = AuditLog(
+        user_id=user.id,
+        event_type="SOCIAL_DISCONNECTED",
+        details=f'{{"platform": "{platform_name}", "account_name": "{acc_name}"}}'
+    )
+    db.add(audit)
     db.commit()
     return {"status": "success", "message": "Account disconnected successfully"}
 
 
 # ==========================================
-# MEDIA UPLOADER ENDPOINT
+# MEDIA VALIDATION & UPLOAD ENGINE
 # ==========================================
 
-import tempfile
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 MB
+
+def validate_magic_bytes(header: bytes) -> Tuple[bool, str]:
+    """
+    Validates file magic bytes against allowed image and video formats.
+    Returns: (is_valid, detected_mime)
+    """
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True, "image/png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return True, "image/jpeg"
+    if header.startswith(b"RIFF") and b"WEBP" in header[:16]:
+        return True, "image/webp"
+    if b"ftyp" in header[:20]:
+        return True, "video/mp4"
+    return False, "application/octet-stream"
+
+
 @app.post("/api/social/upload-file")
-async def upload_custom_media(file: UploadFile = File(...)):
-    suffix = Path(file.filename).suffix.lower()
+async def upload_custom_media(
+    file: UploadFile = File(...),
+    user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Secure media uploader with magic byte validation and size limits.
+    """
+    content = await file.read()
+    
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=400, detail="File exceeds maximum allowed size of 25MB.")
+    
+    is_valid, detected_mime = validate_magic_bytes(content[:64])
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or unrecognized media format. Only PNG, JPEG, WebP, and MP4 files are permitted."
+        )
+
+    suffix = Path(file.filename or "upload.png").suffix.lower()
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tfile:
-        content = await file.read()
         tfile.write(content)
         temp_path = tfile.name
 
     cdn_url = upload_local_file(temp_path)
-    is_video = suffix in [".mp4", ".mov", ".avi"]
+    is_video = "video" in detected_mime or suffix in [".mp4", ".mov", ".avi"]
+
+    if user:
+        media_rec = MediaFile(
+            user_id=user.id,
+            filename=file.filename or "media_upload",
+            mime_type=detected_mime,
+            file_size_bytes=len(content),
+            storage_path=cdn_url or temp_path,
+            is_video=is_video
+        )
+        db.add(media_rec)
+        db.commit()
+
     return {
         "status": "success",
         "filename": file.filename,
+        "mime_type": detected_mime,
         "media_url": cdn_url or temp_path,
         "is_video": is_video
     }
@@ -446,7 +939,8 @@ def publish_multi_account(
     db: Session = Depends(get_db)
 ):
     """
-    Publishes to MULTIPLE social accounts in 1-Click with partial-success resilience and user isolation.
+    Publishes to MULTIPLE social accounts in 1-Click with AES token decryption,
+    partial-success resilience, and strict user isolation.
     """
     if not req.content.strip():
         raise HTTPException(status_code=400, detail="Content/caption cannot be empty.")
@@ -501,6 +995,7 @@ def publish_multi_account(
 
     if accounts_to_publish:
         for acc in accounts_to_publish:
+            decrypted_token = acc.get_decrypted_access_token()
             result_item = {
                 "account_id": acc.id,
                 "platform": acc.platform,
@@ -517,32 +1012,36 @@ def publish_multi_account(
                         content=req.content,
                         media_path_or_url=final_media_url,
                         user_id=acc.platform_account_id,
-                        access_token=acc.access_token,
+                        access_token=decrypted_token,
                         author=author_name
                     )
                     result_item["status"] = res.get("status", "FAILED")
                     result_item["post_id"] = res.get("post_id")
                     result_item["error_code"] = res.get("error_code")
                     result_item["message"] = res.get("message", "")
+                    if res.get("status") == "FAILED" and "OAuthException" in str(res.get("message")):
+                        acc.status = "ACTION_REQUIRED"
 
                 elif acc.platform == "facebook":
                     res = post_facebook_page(
                         content=req.content,
                         media_path_or_url=final_media_url,
                         page_id=acc.platform_account_id,
-                        page_access_token=acc.access_token,
+                        page_access_token=decrypted_token,
                         author=author_name
                     )
                     result_item["status"] = res.get("status", "FAILED")
                     result_item["post_id"] = res.get("post_id")
                     result_item["error_code"] = res.get("error_code")
                     result_item["message"] = res.get("message", "")
+                    if res.get("status") == "FAILED" and "OAuthException" in str(res.get("message")):
+                        acc.status = "ACTION_REQUIRED"
 
                 elif acc.platform == "linkedin":
                     res = post_linkedin(
                         content=req.content,
                         media_path_or_url=final_media_url,
-                        access_token=acc.access_token,
+                        access_token=decrypted_token,
                         author_urn=acc.platform_account_id,
                         author=author_name
                     )
@@ -550,6 +1049,8 @@ def publish_multi_account(
                     result_item["post_id"] = res.get("post_id")
                     result_item["error_code"] = res.get("error_code")
                     result_item["message"] = res.get("message", "")
+                    if res.get("status") == "FAILED" and "EXPIRED" in str(res.get("error_code")):
+                        acc.status = "ACTION_REQUIRED"
 
                 elif acc.platform == "whatsapp":
                     res = post_whatsapp(
@@ -634,6 +1135,15 @@ def publish_multi_account(
 
     if post_log:
         post_log.overall_status = overall_status
+        db.commit()
+
+    if user:
+        audit = AuditLog(
+            user_id=user.id,
+            event_type="POST_PUBLISHED",
+            details=f'{{"job_id": "{job_id}", "status": "{overall_status}", "total": {len(platform_results)}}}'
+        )
+        db.add(audit)
         db.commit()
 
     return {
@@ -758,9 +1268,9 @@ def get_settings(user: Optional[User] = Depends(get_current_user), db: Session =
     return {
         "watermark_name": settings.watermark_name,
         "whatsapp_phone": settings.whatsapp_phone,
-        "instagram": settings.instagram_connected,
-        "facebook": settings.facebook_connected,
-        "linkedin": settings.linkedin_connected
+        "instagram_connected": settings.instagram_connected,
+        "facebook_connected": settings.facebook_connected,
+        "linkedin_connected": settings.linkedin_connected
     }
 
 
@@ -779,21 +1289,19 @@ def update_settings(req: ProfileUpdateRequest, user: Optional[User] = Depends(ge
 
     db.commit()
     db.refresh(settings)
-    return {
-        "status": "success",
+    return {"status": "success", "settings": {
         "watermark_name": settings.watermark_name,
         "whatsapp_phone": settings.whatsapp_phone
-    }
+    }}
 
 
 # ==========================================
-# STATIC FRONTEND SPA SERVING
+# STATIC SPA ROUTING (PRESERVED)
 # ==========================================
 
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
-
 if FRONTEND_DIST.exists():
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):

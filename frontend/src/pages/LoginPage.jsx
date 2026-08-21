@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Sparkles, Lock, Mail, ArrowRight } from 'lucide-react';
+import { Sparkles, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -17,7 +18,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       navigate('/dashboard');
     } catch (err) {
       console.error(err);
@@ -35,7 +36,7 @@ export default function LoginPage() {
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <h1 className="text-2xl font-extrabold text-slate-100">Welcome Back</h1>
-          <p className="text-xs text-slate-400">Sign in to your Agentic AI Omni-Studio account</p>
+          <p className="text-xs text-slate-400">Sign in to your OneClick Post account</p>
         </div>
 
         {error && (
@@ -73,6 +74,20 @@ export default function LoginPage() {
                 className="w-full glass-input pl-10 pr-4 py-2.5 text-sm"
               />
             </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-900/60 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+              />
+              <span className="text-xs text-slate-300 font-medium flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Remember me on this device
+              </span>
+            </label>
           </div>
 
           <button
