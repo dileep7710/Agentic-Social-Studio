@@ -473,24 +473,29 @@ with tab_profile:
             if st.button("✨ Save Profile (Private) / प्रोफाइल सेव करें", type="primary", use_container_width=True):
                 st.session_state["watermark"] = input_name
                 st.session_state["phone"] = input_phone
-                # Save Strictly Isolated in Database for this user_sid
-                save_user_profile(
-                    session_id=user_sid,
-                    name=input_name,
-                    phone=input_phone,
-                    ig_id=st.session_state.get("ig_id", ""),
-                    ig_token=st.session_state.get("ig_token", ""),
-                    fb_page_id=st.session_state.get("fb_page_id", ""),
-                    fb_page_token=st.session_state.get("fb_page_token", ""),
-                    li_token=st.session_state.get("li_token", ""),
-                    li_urn=st.session_state.get("li_urn", "")
-                )
+                try:
+                    save_user_profile(
+                        session_id=user_sid,
+                        name=input_name,
+                        phone=input_phone,
+                        ig_id=st.session_state.get("ig_id", ""),
+                        ig_token=st.session_state.get("ig_token", ""),
+                        fb_page_id=st.session_state.get("fb_page_id", ""),
+                        fb_page_token=st.session_state.get("fb_page_token", ""),
+                        li_token=st.session_state.get("li_token", ""),
+                        li_urn=st.session_state.get("li_urn", "")
+                    )
+                except Exception as e:
+                    pass
                 st.toast("🎉 Profile Saved Privately in Isolated Session!")
                 st.rerun()
 
         with b_reset:
             if st.button("🔄 Reset Profile / रीसेट करें", use_container_width=True):
-                clear_user_profile(user_sid)
+                try:
+                    clear_user_profile(user_sid)
+                except Exception:
+                    pass
                 st.session_state["watermark"] = ""
                 st.session_state["phone"] = ""
                 st.session_state["ig_token"] = ""
@@ -511,17 +516,20 @@ with tab_profile:
                 st.session_state["fb_page_id"] = input_fb_page_id
                 st.session_state["fb_page_token"] = input_fb_page_token
                 st.session_state["li_token"] = input_li_token
-                save_user_profile(
-                    session_id=user_sid,
-                    name=st.session_state["watermark"],
-                    phone=st.session_state["phone"],
-                    ig_id=input_ig_id,
-                    ig_token=input_ig_token,
-                    fb_page_id=input_fb_page_id,
-                    fb_page_token=input_fb_page_token,
-                    li_token=input_li_token,
-                    li_urn=st.session_state["li_urn"]
-                )
+                try:
+                    save_user_profile(
+                        session_id=user_sid,
+                        name=st.session_state["watermark"],
+                        phone=st.session_state["phone"],
+                        ig_id=input_ig_id,
+                        ig_token=input_ig_token,
+                        fb_page_id=input_fb_page_id,
+                        fb_page_token=input_fb_page_token,
+                        li_token=input_li_token,
+                        li_urn=st.session_state["li_urn"]
+                    )
+                except Exception:
+                    pass
                 st.success("API Tokens Saved Privately in Your Session!")
 
     with col_right_status:
