@@ -314,6 +314,15 @@ with tab_studio:
             final_media = create_nature_quote_image(caption_text, author=active_author, is_story=True)
             st.session_state["latest_preview"] = final_media
 
+        # Read binary data for download buttons
+        raw_bytes = b""
+        if final_media and os.path.exists(final_media):
+            try:
+                with open(final_media, "rb") as f:
+                    raw_bytes = f.read()
+            except Exception:
+                raw_bytes = b""
+
         with st.spinner("⚡ Uploading asset to high-speed CDN..."):
             img_url = upload_local_file(final_media)
             # Record in Isolated SQLite Database strictly for this session_id
