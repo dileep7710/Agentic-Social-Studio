@@ -1,19 +1,21 @@
 import sqlite3
+import uuid
 from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent / "studio_database.db"
 
 def init_db():
-    """Initializes the SQLite database tables."""
+    """Initializes the SQLite database with multi-user session isolation."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # 1. User Profiles & Settings Table
+    # 1. Multi-User Isolated Profiles Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS user_profiles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT DEFAULT 'Dileep Yadav',
+        session_id TEXT UNIQUE,
+        name TEXT DEFAULT '',
         phone TEXT DEFAULT '',
         ig_id TEXT DEFAULT '',
         ig_token TEXT DEFAULT '',
@@ -25,10 +27,11 @@ def init_db():
     )
     """)
     
-    # 2. Post History Table
+    # 2. Multi-User Isolated Post History Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS post_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT,
         quote_text TEXT,
         author_name TEXT,
         image_url TEXT,
@@ -39,23 +42,36 @@ def init_db():
     conn.commit()
     conn.close()
 
-def save_user_profile(name: str = "", phone: str = "", ig_id: str = "", ig_token: str = "", fb_page_id: str = "", fb_page_token: str = "", li_token: str = "", li_urn: str = ""):
-    """Saves or updates user profile and API tokens in SQLite database."""
+def save_user_profile(session_id: str, name: str = "", phone: str = "", ig_id: str = "", ig_token: str = "", fb_page_id: str = "", fb_page_token: str = "", li_token: str = "", li_urn: str = ""):
+    """Saves or updates profile strictly isolated by unique session_id."""
+    if not session_id:
+        return
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM user_profiles")
     cursor.execute("""
-    INSERT INTO user_profiles (name, phone, ig_id, ig_token, fb_page_id, fb_page_token, li_token, li_urn)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (name, phone, ig_id, ig_token, fb_page_id, fb_page_token, li_token, li_urn))
+    INSERT INTO user_profiles (session_id, name, phone, ig_id, ig_token, fb_page_id, fb_page_token, li_token, li_urn, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(session_id) DO UPDATE SET
+        name=excluded.name,
+        phone=excluded.phone,
+        ig_id=excluded.ig_id,
+        ig_token=excluded.ig_token,
+        fb_page_id=excluded.fb_page_id,
+        fb_page_token=excluded.fb_page_token,
+        li_token=excluded.li_token,
+        li_urn=excluded.li_urn,
+        updated_at=CURRENT_TIMESTAMP
+    """, (session_id, name, phone, ig_id, ig_token, fb_page_id, fb_page_token, li_token, li_urn))
     conn.commit()
     conn.close()
 
-def get_user_profile():
-    """Retrieves saved user profile and tokens from SQLite database."""
+def get_user_profile(session_id: str):
+    """Retrieves profile strictly for the requesting session_id (0% data bleed)."""
+    if not session_id:
+        return {}
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT name, phone, ig_id, ig_token, fb_page_id, fb_page_token, li_token, li_urn FROM user_profiles ORDER BY id DESC LIMIT 1")
+    cursor.execute("SELECT name, phone, ig_id, ig_token, fb_page_id, fb_page_token, li_token, li_urn FROM user_profiles WHERE session_id = ?", (session_id,))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -69,41 +85,34 @@ def get_user_profile():
             "li_token": row[6] or "",
             "li_urn": row[7] or ""
         }
-    return {
-        "name": "Dileep Yadav",
-        "phone": "+917710278967",
-        "ig_id": "17841448994358440",
-        "ig_token": "",
-        "fb_page_id": "61583785015768",
-        "fb_page_token": "",
-        "li_token": "",
-        "li_urn": "urn:li:person:neomMhUioZ"
-    }
+    return {}
 
-def clear_user_profile():
-    """Clears user profile from SQLite database."""
+def clear_user_profile(session_id: str):
+    """Clears profile only for the specific requesting session."""
+    if not session_id:
+        return
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM user_profiles")
+    cursor.execute("DELETE FROM user_profiles WHERE session_id = ?", (session_id,))
     conn.commit()
     conn.close()
 
-def save_post_to_history(quote_text: str, author_name: str, image_url: str):
-    """Saves a generated post into persistent history database."""
+def save_post_to_history(session_id: str, quote_text: str, author_name: str, image_url: str):
+    """Saves a post isolated by user session_id."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO post_history (quote_text, author_name, image_url)
-    VALUES (?, ?, ?)
-    """, (quote_text, author_name, image_url))
+    INSERT INTO post_history (session_id, quote_text, author_name, image_url)
+    VALUES (?, ?, ?, ?)
+    """, (session_id, quote_text, author_name, image_url))
     conn.commit()
     conn.close()
 
-def get_recent_posts(limit: int = 20):
-    """Fetches persistent post history."""
+def get_recent_posts(session_id: str, limit: int = 25):
+    """Fetches post history strictly for the requesting user session."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT quote_text, author_name, image_url, created_at FROM post_history ORDER BY id DESC LIMIT ?", (limit,))
+    cursor.execute("SELECT quote_text, author_name, image_url, created_at FROM post_history WHERE session_id = ? ORDER BY id DESC LIMIT ?", (session_id, limit))
     rows = cursor.fetchall()
     conn.close()
     return rows
