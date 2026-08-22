@@ -146,15 +146,6 @@ if "li_token" not in st.session_state:
 if "li_urn" not in st.session_state:
     st.session_state["li_urn"] = db_profile.get("li_urn", "")
 
-# Fallback for app owner when in local mode
-if not st.session_state["watermark"] and os.getenv("WATERMARK_NAME"):
-    st.session_state["watermark"] = os.getenv("WATERMARK_NAME")
-if not st.session_state["phone"] and os.getenv("WHATSAPP_DEFAULT_PHONE"):
-    st.session_state["phone"] = os.getenv("WHATSAPP_DEFAULT_PHONE")
-if not st.session_state["li_token"] and os.getenv("LINKEDIN_ACCESS_TOKEN"):
-    st.session_state["li_token"] = os.getenv("LINKEDIN_ACCESS_TOKEN")
-    st.session_state["li_urn"] = os.getenv("LINKEDIN_AUTHOR_URN", "")
-
 # Sidebar Profile Status
 with st.sidebar:
     st.image("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80", use_container_width=True)
