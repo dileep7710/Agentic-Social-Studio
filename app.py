@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import os
+import re
 import time
 import json
 import uuid
@@ -505,24 +506,51 @@ with tab_profile:
         b_save, b_reset = st.columns([1.5, 1])
         with b_save:
             if st.button("✨ Save Profile (Private) / प्रोफाइल सेव करें", type="primary", use_container_width=True):
-                st.session_state["watermark"] = input_name
-                st.session_state["phone"] = input_phone
-                try:
-                    save_user_profile(
-                        session_id=user_sid,
-                        name=input_name,
-                        phone=input_phone,
-                        ig_id=st.session_state.get("ig_id", ""),
-                        ig_token=st.session_state.get("ig_token", ""),
-                        fb_page_id=st.session_state.get("fb_page_id", ""),
-                        fb_page_token=st.session_state.get("fb_page_token", ""),
-                        li_token=st.session_state.get("li_token", ""),
-                        li_urn=st.session_state.get("li_urn", "")
-                    )
-                except Exception as e:
-                    pass
-                st.toast("🎉 Profile Saved Privately in Isolated Session!")
-                st.rerun()
+                clean_name = input_name.strip()
+                clean_phone = input_phone.strip()
+
+                # 1. Name Validation
+                has_letter = bool(re.search(r"[a-zA-Z\u0900-\u097F]", clean_name))
+                if clean_name and (len(clean_name) < 2 or not has_letter):
+                    st.error("⚠️ कृपया एक मान्य नाम लिखें (कम से कम 2 अक्षर होने चाहिए) / Please enter a valid name (at least 2 letters).")
+                else:
+                    # 2. Phone Validation (if entered)
+                    phone_valid = True
+                    formatted_phone = clean_phone
+                    if clean_phone:
+                        digits = re.sub(r"[^\d]", "", clean_phone)
+                        if len(digits) < 10 or len(digits) > 15:
+                            phone_valid = False
+                            st.error("⚠️ अमान्य फोन नंबर! कृपया 10 से 15 अंकों का मान्य व्हाट्सएप नंबर लिखें (जैसे: +919876543210) / Invalid phone number. Please enter 10-15 digits.")
+                        else:
+                            # Auto-format 10 digit Indian number if + missing
+                            if len(digits) == 10 and not clean_phone.startswith("+"):
+                                formatted_phone = f"+91{digits}"
+                            elif not clean_phone.startswith("+"):
+                                formatted_phone = f"+{digits}"
+                            else:
+                                formatted_phone = f"+{digits}"
+
+                    if phone_valid:
+                        st.session_state["watermark"] = clean_name
+                        st.session_state["phone"] = formatted_phone
+                        try:
+                            save_user_profile(
+                                session_id=user_sid,
+                                name=clean_name,
+                                phone=formatted_phone,
+                                ig_id=st.session_state.get("ig_id", ""),
+                                ig_token=st.session_state.get("ig_token", ""),
+                                fb_page_id=st.session_state.get("fb_page_id", ""),
+                                fb_page_token=st.session_state.get("fb_page_token", ""),
+                                li_token=st.session_state.get("li_token", ""),
+                                li_urn=st.session_state.get("li_urn", "")
+                            )
+                        except Exception:
+                            pass
+                        st.toast("🎉 प्रोफाइल सफलतापूर्वक सत्यापित होकर सेव हो गई! (Profile Verified & Saved!)")
+                        st.success("✅ प्रोफाइल सफलतापूर्वक सत्यापित होकर सेव हो गई!")
+                        st.rerun()
 
         with b_reset:
             if st.button("🔄 Reset Profile / रीसेट करें", use_container_width=True):
@@ -534,6 +562,7 @@ with tab_profile:
                 st.session_state["phone"] = ""
                 st.session_state["ig_token"] = ""
                 st.session_state["li_token"] = ""
+                st.toast("🔄 Profile Reset Cleanly!")
                 st.rerun()
 
         # Pro Developer API Settings (Optional)
