@@ -1,5 +1,7 @@
 # 🌌 Agentic AI Omni-Studio (Full-Stack Edition)
 
+![Last Updated](https://img.shields.io/badge/Last%20Updated-September%202026-brightgreen)
+
 > **Autonomous AI Assistant for Web Research & 1-Click Multi-Platform Broadcasting**  
 > Powered by Llama 3.2, Python FastAPI, React 18, Vite, Tailwind CSS, and SQLite.
 
