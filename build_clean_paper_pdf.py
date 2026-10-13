@@ -267,11 +267,11 @@ def build_clean_paper():
         body
     ))
 
-    # EMBED THE USER'S INTUITIVE PIPELINE DIAGRAM
-    if os.path.exists("simple_agentic_workflow.png"):
+    # EMBED THE FORMAL IEEE PIPELINE DIAGRAM
+    if os.path.exists("ieee_pipeline_architecture.png"):
         story.append(Spacer(1, 4))
-        story.append(RLImage("simple_agentic_workflow.png", width=7.2*inch, height=4.5*inch))
-        story.append(Paragraph("<b>Fig. 1. End-to-End Agentic Social Studio Pipeline:</b> From a single user instruction, the Agentic Core decomposes the goal, utilizes the LLM Engine for copywriting, synthesizes 4K visual assets, and autonomously broadcasts across five tailored social platforms with self-healing fallback.", caption_style))
+        story.append(RLImage("ieee_pipeline_architecture.png", width=7.2*inch, height=3.8*inch))
+        story.append(Paragraph("<b>Fig. 1. Architectural pipeline of the Agentic-Social-Studio framework:</b> End-to-end operational flow illustrating human intent specification (Stage 1), agentic cognitive goal planning, dual-LLM reasoning, and visual synthesis (Stage 2), parallel multi-platform social dispatch (Stage 3), and fault-isolated self-healing execution (Stage 4).", caption_style))
         story.append(Spacer(1, 4))
 
     story.append(Paragraph("<b>A. Pipeline Components Breakdown</b>", subsec_heading))
