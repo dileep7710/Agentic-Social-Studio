@@ -152,10 +152,7 @@ if "li_urn" not in st.session_state:
 with st.sidebar:
     st.image("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80", use_container_width=True)
     
-    lang = st.radio("🌐 Language / भाषा:", ["English", "हिन्दी (Hindi)"], horizontal=True)
-    
-    st.markdown("---")
-    st.markdown("### 👤 Active Profile / एक्टिव यूजर")
+    st.markdown("### 👤 Active Profile")
     display_user = st.session_state["watermark"] if st.session_state["watermark"] else "Public Guest"
     display_phone = st.session_state["phone"] if st.session_state["phone"] else "Not Set"
     st.markdown(f'<div class="glowing-badge">🏷️ Name: {display_user}</div>', unsafe_allow_html=True)
@@ -163,22 +160,18 @@ with st.sidebar:
     
     st.markdown("---")
     st.markdown("### 🔒 100% Private & Isolated")
-    st.caption("Aapka data aur phone number sirf aapke session tak seemit hai — koi doosra user ise nahi dekh sakta.")
+    st.caption("Your data and credentials are kept strictly isolated in your private browser session.")
 
 # Main Header
-if lang == "English":
-    st.markdown('<div class="fantasy-title">🌌 Agentic AI Omni-Studio</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">Autonomous Goal Understanding, 4K Media Generation & 1-Click Multi-Platform Broadcasting</div>', unsafe_allow_html=True)
-else:
-    st.markdown('<div class="fantasy-title">🌌 एजेंटिक AI ऑम्नी-स्टूडियो</div>', unsafe_allow_html=True)
-    st.markdown('<div class="fantasy-subtitle">4K विजुअल बनाएं, AI से कंटेंट अनुकूलित करें और 1-क्लिक में सभी सोशल मीडिया पर पोस्ट करें</div>', unsafe_allow_html=True)
+st.markdown('<div class="fantasy-title">🌌 Agentic AI Omni-Studio</div>', unsafe_allow_html=True)
+st.markdown('<div class="fantasy-subtitle">Autonomous Goal Understanding, 4K Media Generation & 1-Click Multi-Platform Broadcasting</div>', unsafe_allow_html=True)
 
 # Tabs
 tab_studio, tab_profile, tab_history, tab_guide = st.tabs([
-    "🔮 Studio / पोस्ट स्टूडियो", 
-    "⚙️ Connect Accounts / प्रोफाइल सेटिंग्स", 
-    "📜 History / पिछला इतिहास",
-    "📖 Easy Guide / सरल मदद"
+    "🔮 Studio", 
+    "⚙️ Connect Accounts", 
+    "📜 History",
+    "📖 User Guide"
 ])
 
 # ==========================================
@@ -189,17 +182,15 @@ with tab_studio:
 
     with col_left:
         with st.container(border=True):
-            st.markdown("### 🎨 1. Content & Media / कंटेंट चुनें")
+            st.markdown("### 🎨 1. Content & Media")
 
-            source_label = "Select Content Source:" if lang == "English" else "कंटेंट का प्रकार चुनें:"
-            opt1 = "✨ Generate 4K AI Nature Graphic" if lang == "English" else "✨ 4K AI नेचर ग्राफिक बनाएं"
-            opt2 = "📂 Upload Photo/Video from Phone/PC" if lang == "English" else "📂 अपने फोन/PC से फोटो या वीडियो चुनें"
+            opt1 = "✨ Generate 4K AI Nature Graphic"
+            opt2 = "📂 Upload Photo/Video from Device"
 
-            media_source = st.radio(source_label, [opt1, opt2], horizontal=True)
+            media_source = st.radio("Select Content Source:", [opt1, opt2], horizontal=True)
 
             if media_source == opt2:
-                up_label = "Choose an image (.jpg, .png) or video (.mp4) from your local folder:" if lang == "English" else "अपने कम्प्यूटर या फोन से फोटो या वीडियो चुनें:"
-                uploaded_file = st.file_uploader(up_label, type=["jpg", "jpeg", "png", "mp4"])
+                uploaded_file = st.file_uploader("Choose an image (.jpg, .png) or video (.mp4) from your device:", type=["jpg", "jpeg", "png", "mp4"])
                 if uploaded_file is not None:
                     suffix = Path(uploaded_file.name).suffix
                     tfile = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
@@ -208,17 +199,15 @@ with tab_studio:
                     st.session_state["is_video"] = suffix.lower() in [".mp4", ".mov"]
                     st.success(f"📂 Loaded: {uploaded_file.name}")
             else:
-                btn_txt = "✨ Auto-Generate Inspiring Quote / नया विचार बनाएं" if lang == "English" else "✨ नया विचार (AI Quote) जनरेट करें"
-                if st.button(btn_txt, use_container_width=True):
+                if st.button("✨ Auto-Generate Inspiring Quote", use_container_width=True):
                     with st.spinner("🧠 AI is crafting an inspiring quote..."):
                         chosen_quote = agent.generate_fresh_quote()
                         st.session_state["quote_input"] = chosen_quote
                         st.toast("✨ New inspiring quote generated!")
 
         with st.container(border=True):
-            cap_label = "Caption / Quote / विचार:" if lang == "English" else "कैप्शन या विचार:"
             caption_text = st.text_area(
-                cap_label,
+                "Caption / Quote:",
                 value=st.session_state.get("quote_input", "The secret of getting ahead is getting started."),
                 height=80
             )
@@ -241,7 +230,7 @@ with tab_studio:
                 st.code(adapted_versions["twitter"], language="markdown")
 
         with st.container(border=True):
-            st.markdown("### 🎯 2. Social Destinations / सोशल मीडिया")
+            st.markdown("### 🎯 2. Social Destinations")
             
             c1, c2 = st.columns(2)
             with c1:
@@ -256,11 +245,9 @@ with tab_studio:
         # Action Buttons
         b1, b2 = st.columns([1, 1.3])
         with b1:
-            btn_prev = "🖼️ Refresh Preview" if lang == "English" else "🖼️ प्रीव्यू देखें"
-            preview_clicked = st.button(btn_prev, use_container_width=True)
+            preview_clicked = st.button("🖼️ Refresh Preview", use_container_width=True)
         with b2:
-            btn_post = "🚀 Launch Multi-Platform Post" if lang == "English" else "🚀 सभी जगह पोस्ट करें"
-            publish_clicked = st.button(btn_post, type="primary", use_container_width=True)
+            publish_clicked = st.button("🚀 Launch Multi-Platform Post", type="primary", use_container_width=True)
 
     # Preview Handling
     if preview_clicked or "latest_preview" not in st.session_state:
@@ -272,8 +259,7 @@ with tab_studio:
 
     with col_right:
         with st.container(border=True):
-            prev_title = "### 🖼️ Live 4K Visual Preview" if lang == "English" else "### 🖼️ लाइव 4K प्रीव्यू"
-            st.markdown(prev_title)
+            st.markdown("### 🖼️ Live 4K Visual Preview")
             
             preview_file = st.session_state.get("latest_preview")
             if preview_file and os.path.exists(preview_file):
@@ -284,7 +270,7 @@ with tab_studio:
                     # Direct 1-Click Download Button for ANY User!
                     with open(preview_file, "rb") as file_bytes:
                         st.download_button(
-                            label="💾 Download 4K Graphic / फोटो डाउनलोड करें",
+                            label="💾 Download 4K Graphic",
                             data=file_bytes,
                             file_name="Agentic_AI_Graphic.png",
                             mime="image/png",
@@ -293,8 +279,7 @@ with tab_studio:
                 elif preview_file.lower().endswith((".mp4", ".mov")):
                     st.video(preview_file)
             else:
-                info_txt = "👈 Select a file or click 'Refresh Preview' to see your media here!" if lang == "English" else "👈 बाईं तरफ फोटो चुनें या प्रीव्यू बटन दबाएं!"
-                st.info(info_txt)
+                st.info("👈 Select a file or click 'Refresh Preview' to see your media here!")
 
     # Multi-Platform Execution
     if publish_clicked:
@@ -492,27 +477,27 @@ with tab_studio:
 # ==========================================
 with tab_profile:
     with st.container(border=True):
-        st.markdown("### 👤 User Profile & Privacy / प्रोफाइल सेटिंग्स")
-        st.markdown("🔒 **100% Privacy:** Aapka naam, number aur tokens sirf aapke is browser session mein safe rahenge. Koi doosra user aapka data kabhi nahi dekh sakta.")
+        st.markdown("### 👤 User Profile & Privacy")
+        st.markdown("🔒 **100% Privacy:** Your name, phone number, and API tokens are kept strictly isolated in your current browser session. No other user can ever view or access your data.")
 
     col_left_form, col_right_status = st.columns([1.3, 1], gap="large")
 
     with col_left_form:
         with st.container(border=True):
             st.markdown("#### 🏷️ 1. Your Details")
-            input_name = st.text_input("Signature Name / आपका नाम (Watermark):", value=st.session_state["watermark"], placeholder="Enter your name / अपना नाम लिखें")
-            input_phone = st.text_input("WhatsApp Number / व्हाट्सएप नंबर (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
+            input_name = st.text_input("Signature Name (Watermark):", value=st.session_state["watermark"], placeholder="Enter your name (e.g. Dileep Yadav)")
+            input_phone = st.text_input("WhatsApp Number (with country code):", value=st.session_state["phone"], placeholder="Enter WhatsApp number (e.g. +91...)")
 
         b_save, b_reset = st.columns([1.5, 1])
         with b_save:
-            if st.button("✨ Save Profile (Private) / प्रोफाइल सेव करें", type="primary", use_container_width=True):
+            if st.button("✨ Save Profile (Private)", type="primary", use_container_width=True):
                 clean_name = input_name.strip()
                 clean_phone = input_phone.strip()
 
                 # 1. Name Validation
-                has_letter = bool(re.search(r"[a-zA-Z\u0900-\u097F]", clean_name))
+                has_letter = bool(re.search(r"[a-zA-Z]", clean_name))
                 if clean_name and (len(clean_name) < 2 or not has_letter):
-                    st.error("⚠️ कृपया एक मान्य नाम लिखें (कम से कम 2 अक्षर होने चाहिए) / Please enter a valid name (at least 2 letters).")
+                    st.error("⚠️ Please enter a valid name (at least 2 letters).")
                 else:
                     # 2. Phone Validation (if entered)
                     phone_valid = True
@@ -521,7 +506,7 @@ with tab_profile:
                         digits = re.sub(r"[^\d]", "", clean_phone)
                         if len(digits) < 10 or len(digits) > 15:
                             phone_valid = False
-                            st.error("⚠️ अमान्य फोन नंबर! कृपया 10 से 15 अंकों का मान्य व्हाट्सएप नंबर लिखें (जैसे: +919876543210) / Invalid phone number. Please enter 10-15 digits.")
+                            st.error("⚠️ Invalid phone number. Please enter a valid 10 to 15 digit number with country code (e.g., +919876543210).")
                         else:
                             # Auto-format 10 digit Indian number if + missing
                             if len(digits) == 10 and not clean_phone.startswith("+"):
@@ -548,12 +533,12 @@ with tab_profile:
                             )
                         except Exception:
                             pass
-                        st.toast("🎉 प्रोफाइल सफलतापूर्वक सत्यापित होकर सेव हो गई! (Profile Verified & Saved!)")
-                        st.success("✅ प्रोफाइल सफलतापूर्वक सत्यापित होकर सेव हो गई!")
+                        st.toast("🎉 Profile verified and saved successfully!")
+                        st.success("✅ Profile verified and saved successfully!")
                         st.rerun()
 
         with b_reset:
-            if st.button("🔄 Reset Profile / रीसेट करें", use_container_width=True):
+            if st.button("🔄 Reset Profile", use_container_width=True):
                 try:
                     clear_user_profile(user_sid)
                 except Exception:
@@ -616,8 +601,8 @@ with tab_profile:
 # ==========================================
 with tab_history:
     with st.container(border=True):
-        st.markdown("### 📜 Your Private Post History / आपका इतिहास")
-        st.markdown("Aapke dwara generate kiye gaye sabhi quotes aur graphics ka **Private Record:**")
+        st.markdown("### 📜 Your Private Post History")
+        st.markdown("Private record of all quotes and visual graphics generated during this session:")
         
         recent_posts = get_recent_posts(session_id=user_sid, limit=25)
         if recent_posts:
@@ -630,7 +615,7 @@ with tab_history:
                     if m_url and m_url.startswith("http"):
                         st.markdown(f"📸 **Media Link:** [View HD Image/Video]({m_url})")
         else:
-            st.info("👈 Abhi tak koi post create nahi hua hai. Tab 1 mein jakar naya post create karein!")
+            st.info("👈 No posts created yet. Go to the Studio tab to generate your first post!")
 
 # ==========================================
 # TAB 4: EASY GUIDE & HELP
@@ -639,10 +624,10 @@ with tab_guide:
     with st.container(border=True):
         st.markdown("### 📖 How Any User Can Use This Studio (100% Free & Zero Friction!)")
         st.markdown("""
-        1. **Set Your Name / अपना नाम लिखें:**
+        1. **Set Your Name:**
            - Go to **Tab 2 (Connect Accounts)** and enter your name (e.g. *Dileep Yadav*).
-        2. **Create or Upload Media / फोटो या वीडियो चुनें:**
-           - Go to **Tab 1 (Studio)**, type your quote, click **"✨ Auto-Generate Inspiring Quote"** or upload any photo/video from your phone/PC!
-        3. **1-Click Broadcast Everywhere / पोस्ट करें:**
+        2. **Create or Upload Media:**
+           - Go to **Tab 1 (Studio)**, type your quote, click **"✨ Auto-Generate Inspiring Quote"** or upload any photo/video from your device!
+        3. **1-Click Broadcast Everywhere:**
            - Hit **"🚀 Launch Multi-Platform Post"** to broadcast to **Instagram Story, Feed, Facebook Timeline, LinkedIn, WhatsApp & Twitter (X)** in 1 second!
         """)

@@ -471,7 +471,7 @@ export default function SocialDashboard() {
 
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-wider text-slate-300">
-              Caption / Message / विचार:
+              Caption / Message:
             </label>
             <textarea
               value={caption}
